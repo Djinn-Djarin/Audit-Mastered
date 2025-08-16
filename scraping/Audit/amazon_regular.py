@@ -62,6 +62,7 @@ class AmazonScrapingLogic(ScrapingLogic):
         try:
             await title_locator.wait_for(state="visible", timeout=5000)
             title = await title_locator.text_content()
+            print(f"title {title}")
             return title.strip() if title else "N/A"
         except Exception:
             return "N/A"
@@ -241,19 +242,28 @@ class AmazonScrapingLogic(ScrapingLogic):
         return "N/A"
 
     async def _handle_continue_shopping(self) -> bool:
+        """Check for and handle 'Continue Shopping' button.
+
+        Returns:
+            bool: False if scraping should stop, True if safe to continue.
+        """
+        try:
             button = self.page.locator("button", has_text=re.compile(r'continue shopping', re.IGNORECASE))
             if await button.count() > 0 and await button.is_visible():
-                logger.info(f'Continue Shopping button found {self.asin}')
+                logger.info(f"'Continue Shopping' button found for {self.asin}")
                 try:
                     await button.click()
+                    await self.page.wait_for_timeout(1000)  # small wait after click
+                    return True
                 except Exception as e:
-                    logger.error(f"Button click failed: {e}")
-                    self.result['status'] = 'Suppressed Continue Button'
-                    await csv_audit_general(self.result, self.file_name)
+                    logger.error(f"Failed to click 'Continue Shopping' for {self.asin}: {e}")
                     return False
-            else:
-                logger.error(f"Button not found  {self.asin}")
-            return True
+            return True  # no button → safe to proceed
+        except Exception as e:
+            print(f"Continue Shopping' button found {self.asin}")
+            logger.error(f"Error handling 'Continue Shopping' for {self.asin}: {e}")
+            return False
+
 
     def _scrape_result(self) -> Dict[str, Any]:
         return {
@@ -282,17 +292,14 @@ class AmazonScrapingLogic(ScrapingLogic):
         }
     
     async def _run_scraper(self) -> Dict[str, Any]:
-        if not await self._navigate_and_prepare():
-            return self.result
-
-        if not await self._handle_captcha():
-            return self.result
+        self.result = self._scrape_result()
+        self.result['asin'] = self.asin
 
         if not await self._handle_continue_shopping():
             return self.result
 
         status = await self._status(self.page, self.asin)
-        if status in ['Suppressed' , 'Rush Hour']:
+        if status in ['Suppressed', 'Rush Hour']:
             self.result['status'] = status
             await csv_audit_general(self.result, self.file_name)
             return self.result
@@ -300,34 +307,36 @@ class AmazonScrapingLogic(ScrapingLogic):
         try:
             self.result.update({
                 "status": status,
-                "brand_name": await self._extract_brand_name(),
-                "browse_node": await self._extract_browse_node(),
-                "title": await self._extract_title(),
-                "reviews": await self._extract_reviews(),
-                "ratings": await self._extract_ratings(),
-                "variations": await self._extract_variations(),
-                "deal": await self._extract_deal(),
-                "seller": await self._extract_seller(),
+                "brand_name": await self._brand_name(),
+                "browse_node": await self._browse_node(),
+                "title": await self._title(),
+                "reviews": await self._reviews(),
+                "ratings": await self._ratings(),
+                "variations": await self._variations(),
+                "deal": await self._deal(),
+                "seller": await self._seller(),
             })
-            image_count, _ = await self._extract_images()
-            self.result["image_len"] = image_count
-            self.result["video"] = await self._extract_video()
-            self.result["main_img_url"] = await self._extract_main_img_url()
-            self.result["bullet_point_len"] = await self._extract_bullet_point_len()
-            self.result["bestSellerRank"] = await self._extract_best_seller_rank()
-            self.result["price"] = await self._extract_price()
-            self.result["MRP"] = await self._extract_mrp()
-            self.result["availability"] = await self._extract_availability()
-            self.result["description"] = await self._extract_description()
-            self.result["A_plus"] = await self._extract_aplus()
-            self.result["store_link"] = await self._extract_store_link()
+            self.result["image_len"] = await self._image_length()
+            self.result["video"] = await self._video()
+            self.result["main_img_url"] = await self._main_img_url()
+            self.result["bullet_point_len"] = await self._bullet_point_len()
+            self.result["bestSellerRank"] = await self._best_seller_rank()
+            self.result["price"] = await self._price()
+            self.result["MRP"] = await self._mrp()
+            self.result["availability"] = await self._availability()
+            self.result["description"] = await self._description()
+            self.result["A_plus"] = await self._aplus()
+            self.result["store_link"] = await self._store_link()
+
             try:
                 await csv_audit_general(self.result, self.file_name)
             except Exception as e:
                 logger.info(f"error at the end of csv file {e}")
+
             await self.page.close()
             gc.collect()
             return self.result
+
         except Exception as e:
             logger.info(f"error {e}")
             self.result['status'] = 'Suppressed'

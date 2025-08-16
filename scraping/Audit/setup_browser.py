@@ -15,10 +15,10 @@ logger = logging.getLogger('scraping')
 
 
 class ScrapingLogic:
-    def __init__(self, page, product_id, file_name, context_settings):
+    def __init__(self, page, product_id, context_settings):
         self.page = page
         self.product_id =product_id
-        self.file_name = file_name
+        self.file_name = f"{product_id}.csv"
         self.context_settings = context_settings
 
     def _status(self):
@@ -101,8 +101,11 @@ class AmazonPageManager(PageManager):
             await self.page.wait_for_load_state("domcontentloaded")
             await asyncio.sleep(random.uniform(3, 5))
             captcha_result = await self._handle_captcha()
-            if not captcha_result:
-                scraping_logic = AmazonScrapingLogic(self.page, self.product_id, self.context_settings, )
+     
+            if captcha_result:
+                print(f"Page loaded for {asin}")
+                scraping_logic = AmazonScrapingLogic(self.page, asin, self.context_settings )
+                print(f"Captcha not found for {self.product_id}")
                 await scraping_logic._run_scraper()
                 return True        
         except Exception as e:
