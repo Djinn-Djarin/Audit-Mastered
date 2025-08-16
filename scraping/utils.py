@@ -1,5 +1,5 @@
 from django.http import HttpResponse
-from .models import ProductListItem
+from .models import ProductList
 import pandas as pd
 
 
@@ -24,8 +24,8 @@ class ProductListExcelExporter:
     Single Responsibility: Only handles export logic.
     """
     @staticmethod
-    def export(product_list):
-        product_items = ProductListItem.objects.filter(product_list=product_list).select_related('product_info')
+    def export(product_list: ProductList):
+        product_items = product_list.products.all()
         data = [
             {
                 "Product ID": item.product_info.product_id,

@@ -43,10 +43,25 @@ class FileParser:
         cleaned_dataframe = data_cleaner.clean()
         return cleaned_dataframe
 
-# === File Parser End ===
+# === DataFrame Cleaner ===
+
+class DataFrameCleaner:
+    def __init__(self, df):
+        self.df = df
+
+    def drop_na(self):
+        self.df.dropna(inplace=True)
+        return self
+
+    def reset_index(self):
+        self.df.reset_index(drop=True, inplace=True)
+        return self
+
+    def clean(self):
+        return self.drop_na().reset_index().df
 
 
-
+# ====================== Still need to implement ===========================
 
 # ===  Product ID Rule Generic Classes === 
 class ProductIdRule:
@@ -91,9 +106,6 @@ class NotNullRule(ProductIdRule):
     def validate(self, product_ids):
         if product_ids.isnull().any():
             raise ValidationError(f"Column '{self.column_name}' contains null values.")
-
-
-
 class ProductIdValidator:
     PLATFORM_RULES = {
         "amazon": [
@@ -133,20 +145,3 @@ class ProductIdValidator:
 
         return True
     
-
-class DataFrameCleaner:
-    def __init__(self, df):
-        self.df = df
-
-    def drop_na(self):
-        self.df.dropna(inplace=True)
-        return self
-
-    def reset_index(self):
-        self.df.reset_index(drop=True, inplace=True)
-        return self
-
-    def clean(self):
-        return self.drop_na().reset_index().df
-
-

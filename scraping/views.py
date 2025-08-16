@@ -16,100 +16,164 @@ from .file_parsing import FileParser
 
 from .tasks import run_audit_task
 from .Audit.audit import RunAudit
-from .models import ProductList, ProductInfo, ProductListItem
+from .models import ProductList, ProductInfo
 from .utils import ProductListExcelExporter, ExcelExport
-
-
 
 
 r = redis.Redis(host='localhost', port=6379, db=0)
 
-# === Add a new Product List for Audit === 
+
+
+# === Create a ProductList  ===
 class CreateProductList(APIView):
     permission_classes = []
 
-    def post(self, request, *args, **kwargs):
-        file = request.FILES.get("file")
-        column_name = request.data.get("column_name")
-        audit_platform = request.data.get("audit_platform")
+    def get(self, request):
+        product_list = ProductList.objects.create(user=request.user)
+        return Response(
+            {"status":"success", "message": f"Product list created {product_list.id} {product_list.name}"}, status=status.HTTP_201_CREATED
+        )
 
-        if not file or not column_name or not audit_platform:
-            raise ValidationError({"detail": "File and column_name are required"})
+
+# === Delete a ProductList  ===
+class DeleteProductList(APIView):
+    permission_classes = []
+
+    def delete(self, request, pk):
+        """Delete a product list by ID."""
+        try:
+            product_list = ProductList.objects.get(id=pk, user=request.user)
+            product_list.delete()
+            return Response({"message": "Product list deleted"}, status=status.HTTP_200_OK)
+        except ProductList.DoesNotExist:
+            return Response({"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND)
         
-        file_validator  = FileParser(file)
+
+# === Get all ProductLists of a user ===
+class GetAllProductLists(APIView):
+    permission_classes = []
+
+    def get(self, request,):
+        try:
+            product_list = ProductList.objects.filter(user=request.user)
+            if product_list.count() == 0:
+                return Response({"message": "No product lists found"}, status=status.HTTP_404_NOT_FOUND)
+            data = [
+                {'id':pl.id, 
+                  'name': pl.name,
+                  "created_at": pl.created_at,
+                  "product_count": pl.products_list.count()
+            } 
+    
+                for pl in product_list
+                       ]
+            return Response({"data":data, "message": "success"}, status=status.HTTP_200_OK)
+        except ProductList.DoesNotExist:
+            return Response({"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+# === Add Prodcuts to a ProductList ===
+class AddItemsToProductList(APIView):
+    permission_classes = []
+
+    def post(self, request):
+        file = request.FILES.get("file")
+        list_id = request.data.get("list_id")
+        request.user = User.objects.get(username="admin")
+
+        if not file:
+            raise ValidationError({"detail": "File is required"})
+        
+        # Parse the file into a cleaned dataframe
+        file_validator = FileParser(file)
         try:
             cleaned_dataframe = file_validator.parse()
-
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
-        admin_user = User.objects.get(username='admin')
-        products = ProductService.bulk_create_products(
-            user= admin_user,
-            product_ids=cleaned_dataframe[column_name].tolist(),
-            audit_platform=audit_platform
+        # Get the target product list for the current user
+        try:
+            product_list = ProductList.objects.get(id=list_id, user=request.user)
+        except ProductList.DoesNotExist:
+            return Response({"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        product_ids = cleaned_dataframe[product_list.platform].to_list()
+        # Use the platform from the existing list
+        _, created_products = ProductService.bulk_create_products(
+            user=request.user,
+            product_ids=product_ids,
+            platform=product_list.platform,
+            product_list=product_list,
         )
 
         return Response(
-            {"message": f"{len(products)} products created successfully", "products": [str(p) for p in products]},
+            {
+                "status": "success",
+                "message": f"{len(created_products)} products added to list '{product_list.name}'",
+                "products": [str(p) for p in created_products]
+            },
             status=status.HTTP_201_CREATED
         )
     
-# === Delete a Product List ===
-class DeleteProductList(APIView):
+# === All items of a ProductList ===
+class GetProductListItems(APIView):
     permission_classes = []
-    def delete(self, request, *args, **kwargs):
-        product_list_id = request.data.get("product_list_id")
-        if not product_list_id:
-            return Response({"detail": "Product list ID is required"}, status=status.HTTP_400_BAD_REQUEST)
 
+    def get(self, request, list_id):
         try:
-            product_list = ProductList.objects.get(id=product_list_id)
-            product_list.delete()
-            return Response({"message": "Product list deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+            product_list = ProductList.objects.get(id=list_id, user=request.user)
+            products = product_list.products_list.all()  # related_name from ProductInfo
+
+            data = []
+            for product in products:
+                product_data = {}
+                for field in product._meta.fields:
+                    value = getattr(product, field.name)
+                    # Convert foreign keys to string or ID
+                    if field.many_to_one:  # i.e., ForeignKey
+                        if field.name == "user":
+                            value = value.username  # show username instead of object
+                        elif field.name == "product_list":
+                            value = value.name  # show product list name
+                        else:
+                            value = value.id  # fallback to id
+                    product_data[field.name] = value
+                data.append(product_data)
+
+            return Response({"data": data, "message": "success"}, status=status.HTTP_200_OK)
+
         except ProductList.DoesNotExist:
-            return Response({"detail": "Product list not found"}, status=status.HTTP_404_NOT_FOUND)
-        
-
-# === Get all created list from a user ===          
-class GetAllProductLists(APIView):
-    permission_classes = []
-    def get(self, request, *args, **kwargs):
-        admin_user = User.objects.get(username='admin')
-        product_lists = ProductList.objects.filter(user=admin_user)
-        data = [{"id": pl.id, "name": pl.name} for pl in product_lists]
-        return Response(data, status=status.HTTP_200_OK)
-
+            return Response({"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND)
 
 # === Get Excel Sheet of all the product under a list after Audit  === 
-class GetProductListItemsExcel(APIView):
-    permission_classes = []
+# class GetProductListItemsExcel(APIView):
+#     permission_classes = []
 
-    def get(self, request):
-        # user = request.user
-        user = User.objects.get(username='admin')
-        product_list_id = request.query_params.get('product_list')
+#     def get(self, request):
+#         # user = request.user
+#         user = User.objects.get(username='admin')
+#         product_list_id = request.query_params.get('product_list')
 
-        if not product_list_id:
-            return HttpResponse("Product list ID is required", status=400)
+#         if not product_list_id:
+#             return HttpResponse("Product list ID is required", status=400)
 
-        product_list = self._get_product_list(product_list_id, user)
-        if not product_list:
-            return HttpResponse("Product list not found", status=404)
+#         product_list = self._get_product_list(product_list_id, user)
+#         if not product_list:
+#             return HttpResponse("Product list not found", status=404)
 
-        df = ProductListExcelExporter.export(product_list)
-        response = self._build_excel_response(df, product_list.name,product_list_id)
-        return response
+#         df = ProductListExcelExporter.export(product_list)
+#         response = self._build_excel_response(df, product_list.name,product_list_id)
+#         return response
 
-    def _get_product_list(self, product_list_id, user):
-        try:
-            return ProductList.objects.get(id=product_list_id, user=user)
-        except ProductList.DoesNotExist:
-            return None
+#     def _get_product_list(self, product_list_id, user):
+#         try:
+#             return ProductList.objects.get(id=product_list_id, user=user)
+#         except ProductList.DoesNotExist:
+#             return None
 
-    def _build_excel_response(self, df, filename, product_list_id):  
-        response  = ExcelExport.export(df, filename, sheet_name = product_list_id)
-        return response
+#     def _build_excel_response(self, df, filename, product_list_id):  
+#         response  = ExcelExport.export(df, filename, sheet_name = product_list_id)
+#         return response
 
 # === Run Audit for a Product List ===
 class RunAudit(APIView):
@@ -233,11 +297,12 @@ class UserProductStats(APIView):
         try:
             user = User.objects.get(id=user_id)
             product_lists = ProductList.objects.filter(user=user)
+            product_count = sum(pl.products.count() for pl in product_lists)
             stats = {
                 "user_id": user.id,
                 "username": user.username,
                 "product_list_count": product_lists.count(),
-                "product_count": ProductListItem.objects.filter(product_list__in=product_lists).count()
+                "product_count": product_count
             }
             return Response(stats, status=status.HTTP_200_OK)
         except User.DoesNotExist:
