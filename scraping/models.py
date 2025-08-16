@@ -16,12 +16,12 @@ from django.contrib.auth.models import User
 
 class ProductList(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='product_lists')
-    name = models.CharField(max_length=255, editable=False)
+    name = models.CharField(max_length=255, blank=True, null=True)
     platform = models.CharField(max_length=100, default="amazon")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
-        if not self.pk:
+        if not self.name:
             timestamp = timezone.localtime(self.created_at if self.created_at else timezone.now())
             formatted_time = timestamp.strftime("%d %b %Y %I.%M%p").lower()
             self.name = f"{self.user.username} {formatted_time}"

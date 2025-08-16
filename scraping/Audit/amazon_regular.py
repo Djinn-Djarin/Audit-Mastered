@@ -7,8 +7,8 @@ from .save_csv import csv_audit_general
 from playwright.async_api import Page
 
 
-from typing import List, Literal, Dict, Any
-from .audit import ScrapingLogic
+from typing import  Literal, Dict, Any
+from .setup_browser import ScrapingLogic
 
 logger = logging.getLogger('scraping')
 
@@ -50,12 +50,13 @@ class StatusChecker:
 
         return status
 
-async def check_status(page: Page, asin: str) :
-    return await StatusChecker(page, asin).check()
 
 
 class AmazonScrapingLogic(ScrapingLogic):
-       
+
+    async def _status(self, page: Page, asin: str) :
+        return await StatusChecker(page, asin).check()
+
     async def _title(self) -> str:
         title_locator = self.page.locator("span#productTitle").first
         try:
@@ -290,7 +291,7 @@ class AmazonScrapingLogic(ScrapingLogic):
         if not await self._handle_continue_shopping():
             return self.result
 
-        status = await check_status(self.page, self.asin)
+        status = await self._status(self.page, self.asin)
         if status in ['Suppressed' , 'Rush Hour']:
             self.result['status'] = status
             await csv_audit_general(self.result, self.file_name)

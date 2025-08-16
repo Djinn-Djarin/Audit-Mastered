@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
-
+from celery.result import AsyncResult
 
 from .bulk_create_product import ProductService
 from .file_parsing import FileParser
@@ -28,12 +28,18 @@ r = redis.Redis(host='localhost', port=6379, db=0)
 class CreateProductList(APIView):
     permission_classes = []
 
-    def get(self, request):
-        product_list = ProductList.objects.create(user=request.user)
+    def post(self, request):
+        name = request.data.get("list_name")
+       
+        check_product_list = ProductList.objects.filter(user=request.user, name=name).first()
+        if check_product_list:
+            return Response(
+                {"status":"error", "message": "Product list already exists"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        product_list = ProductList.objects.create(user=request.user,name=name)
         return Response(
             {"status":"success", "message": f"Product list created {product_list.id} {product_list.name}"}, status=status.HTTP_201_CREATED
         )
-
 
 # === Delete a ProductList  ===
 class DeleteProductList(APIView):
@@ -47,7 +53,6 @@ class DeleteProductList(APIView):
             return Response({"message": "Product list deleted"}, status=status.HTTP_200_OK)
         except ProductList.DoesNotExist:
             return Response({"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND)
-        
 
 # === Get all ProductLists of a user ===
 class GetAllProductLists(APIView):
@@ -70,7 +75,6 @@ class GetAllProductLists(APIView):
             return Response({"data":data, "message": "success"}, status=status.HTTP_200_OK)
         except ProductList.DoesNotExist:
             return Response({"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND)
-
 
 # === Add Prodcuts to a ProductList ===
 class AddItemsToProductList(APIView):
@@ -146,34 +150,34 @@ class GetProductListItems(APIView):
             return Response({"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND)
 
 # === Get Excel Sheet of all the product under a list after Audit  === 
-# class GetProductListItemsExcel(APIView):
-#     permission_classes = []
+class GetProductListItemsExcel(APIView):
+    permission_classes = []
 
-#     def get(self, request):
-#         # user = request.user
-#         user = User.objects.get(username='admin')
-#         product_list_id = request.query_params.get('product_list')
+    def get(self, request):
+        # user = request.user
+        user = User.objects.get(username='admin')
+        product_list_id = request.query_params.get('product_list')
 
-#         if not product_list_id:
-#             return HttpResponse("Product list ID is required", status=400)
+        if not product_list_id:
+            return HttpResponse("Product list ID is required", status=400)
 
-#         product_list = self._get_product_list(product_list_id, user)
-#         if not product_list:
-#             return HttpResponse("Product list not found", status=404)
+        product_list = self._get_product_list(product_list_id, user)
+        if not product_list:
+            return HttpResponse("Product list not found", status=404)
 
-#         df = ProductListExcelExporter.export(product_list)
-#         response = self._build_excel_response(df, product_list.name,product_list_id)
-#         return response
+        df = ProductListExcelExporter.export(product_list)
+        response = self._build_excel_response(df, product_list.name,product_list_id)
+        return response
 
-#     def _get_product_list(self, product_list_id, user):
-#         try:
-#             return ProductList.objects.get(id=product_list_id, user=user)
-#         except ProductList.DoesNotExist:
-#             return None
+    def _get_product_list(self, product_list_id, user):
+        try:
+            return ProductList.objects.get(id=product_list_id, user=user)
+        except ProductList.DoesNotExist:
+            return None
 
-#     def _build_excel_response(self, df, filename, product_list_id):  
-#         response  = ExcelExport.export(df, filename, sheet_name = product_list_id)
-#         return response
+    def _build_excel_response(self, df, filename, product_list_id):  
+        response  = ExcelExport.export(df, filename, sheet_name = product_list_id)
+        return response
 
 # === Run Audit for a Product List ===
 class RunAudit(APIView):
@@ -191,7 +195,11 @@ class RunAudit(APIView):
             AUDIT_INSTANCE_COUNTER = 'AUDIT_INSTANCES_'
             r.incr(AUDIT_INSTANCE_COUNTER)
             try:
-                run_audit_task.delay(product_list.id)
+                task = run_audit_task.delay(product_list.id)
+                return Response({
+                "message": f"Audit started for {product_list.name}",
+                "task_id": task.id
+            }, status=status.HTTP_202_ACCEPTED)
             finally:
                 r.decr(AUDIT_INSTANCE_COUNTER)
 
@@ -199,6 +207,33 @@ class RunAudit(APIView):
             return Response({"detail": "Product list not found"}, status=status.HTTP_404_NOT_FOUND)
 
         return Response({"message": f"Audit started for {product_list.name}"}, status=status.HTTP_200_OK)
+
+# === Check Audit Status ===
+
+class AuditTaskStatus(APIView):
+    def post(self, request):
+        task_id = request.data.get("task_id")
+        if not task_id:
+            return Response(
+                {"error": "task_id query parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        result = AsyncResult(task_id)
+
+        # Make sure result.result is JSON-safe
+        safe_result = None
+        if result.ready():
+            try:
+                safe_result = str(result.result)
+            except Exception as e:
+                safe_result = f"Unserializable result: {e}"
+
+        return Response({
+            "task_id": task_id,
+            "status": result.status,   # PENDING, STARTED, SUCCESS, FAILURE, RETRY
+            "result": safe_result
+        }, status=status.HTTP_200_OK)
 
 # === Streaming of an Audit over SSR ===
 class AuditStreamingSSR:
