@@ -15,14 +15,18 @@ from django.contrib.auth.models import User
 
 
 class ProductList(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='product_lists')
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="product_lists"
+    )
     name = models.CharField(max_length=255, blank=True, null=True)
     platform = models.CharField(max_length=100, default="amazon")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
         if not self.name:
-            timestamp = timezone.localtime(self.created_at if self.created_at else timezone.now())
+            timestamp = timezone.localtime(
+                self.created_at if self.created_at else timezone.now()
+            )
             formatted_time = timestamp.strftime("%d %b %Y %I.%M%p").lower()
             self.name = f"{self.user.username} {formatted_time}"
         super().save(*args, **kwargs)
@@ -30,9 +34,14 @@ class ProductList(models.Model):
     def __str__(self):
         return self.name
 
+
 class ProductInfo(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='product_infos')
-    product_list = models.ForeignKey(ProductList, on_delete=models.CASCADE, related_name='products_list')
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="product_infos"
+    )
+    product_list = models.ForeignKey(
+        ProductList, on_delete=models.CASCADE, related_name="products_list"
+    )
     product_id = models.CharField(max_length=100)
 
     status = models.CharField(max_length=100, default="live")
@@ -60,35 +69,40 @@ class ProductInfo(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('product_list', 'product_id')
+        unique_together = ("product_list", "product_id")
 
     def __str__(self):
-         return f"{self.product_id} ({self.product_list.name})"
+        return f"{self.product_id} ({self.product_list.name})"
 
 
 class UserPref(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='user_preferences')
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="user_preferences"
+    )
     preferred_audit_platform = models.CharField(max_length=100, default="amazon")
     preferred_column_name = models.CharField(max_length=100, default="default_column")
     preferred_filetype = models.CharField(max_length=100, default=".xlsx")
 
     def __str__(self):
         return f"{self.user.username}'s Preferences"
-    
+
+
 class AdminPref(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='admin_preferences')
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="admin_preferences"
+    )
     preferred_audit_platform = models.CharField(max_length=100, default="amazon")
     preferred_column_name = models.CharField(max_length=100, default="default_column")
     preferred_filetype = models.CharField(max_length=100, default=".xlsx")
     concurrent_amazon_users = models.IntegerField(default=5)
     audit_batches_per_user = models.IntegerField(default=5)
 
-
     def __str__(self):
         return f"{self.user.username}'s Preferences"
 
+
 class IssuesTrackerThread(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='issues')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="issues")
     issue_type = models.CharField(max_length=100)
     description = models.TextField()
     reply = models.TextField()

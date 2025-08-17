@@ -15,81 +15,254 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.CreateModel(
-            name='AdminPref',
+            name="AdminPref",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('preferred_audit_platform', models.CharField(default='amazon', max_length=100)),
-                ('preferred_column_name', models.CharField(default='default_column', max_length=100)),
-                ('preferred_filetype', models.CharField(default='.xlsx', max_length=100)),
-                ('concurrent_amazon_users', models.IntegerField(default=5)),
-                ('audit_batches_per_user', models.IntegerField(default=5)),
-                ('user', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='admin_preferences', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "preferred_audit_platform",
+                    models.CharField(default="amazon", max_length=100),
+                ),
+                (
+                    "preferred_column_name",
+                    models.CharField(default="default_column", max_length=100),
+                ),
+                (
+                    "preferred_filetype",
+                    models.CharField(default=".xlsx", max_length=100),
+                ),
+                ("concurrent_amazon_users", models.IntegerField(default=5)),
+                ("audit_batches_per_user", models.IntegerField(default=5)),
+                (
+                    "user",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="admin_preferences",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='IssuesTrackerThread',
+            name="IssuesTrackerThread",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('issue_type', models.CharField(max_length=100)),
-                ('description', models.TextField()),
-                ('reply', models.TextField()),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='issues', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("issue_type", models.CharField(max_length=100)),
+                ("description", models.TextField()),
+                ("reply", models.TextField()),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="issues",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='ProductList',
+            name="ProductList",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(editable=False, max_length=255)),
-                ('platform', models.CharField(default='amazon', max_length=100)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='product_lists', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(editable=False, max_length=255)),
+                ("platform", models.CharField(default="amazon", max_length=100)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="product_lists",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='UserPref',
+            name="UserPref",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('preferred_audit_platform', models.CharField(default='amazon', max_length=100)),
-                ('preferred_column_name', models.CharField(default='default_column', max_length=100)),
-                ('preferred_filetype', models.CharField(default='.xlsx', max_length=100)),
-                ('user', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='user_preferences', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "preferred_audit_platform",
+                    models.CharField(default="amazon", max_length=100),
+                ),
+                (
+                    "preferred_column_name",
+                    models.CharField(default="default_column", max_length=100),
+                ),
+                (
+                    "preferred_filetype",
+                    models.CharField(default=".xlsx", max_length=100),
+                ),
+                (
+                    "user",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="user_preferences",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='ProductInfo',
+            name="ProductInfo",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('product_id', models.CharField(max_length=100)),
-                ('status', models.CharField(default='live', max_length=100)),
-                ('title', models.CharField(default='default_value', max_length=500, null=True)),
-                ('reviews', models.FloatField(default=0.0, null=True)),
-                ('ratings', models.FloatField(default=0.0, null=True)),
-                ('browse_node', models.CharField(default='default_value', max_length=500, null=True)),
-                ('brand_name', models.CharField(default='default_value', max_length=100, null=True)),
-                ('generic_name', models.CharField(default='default_value', max_length=100, null=True)),
-                ('variations', models.CharField(default='default_value', max_length=200, null=True)),
-                ('deal', models.CharField(default='default_value', max_length=100, null=True)),
-                ('seller', models.CharField(default='default_value', max_length=50, null=True)),
-                ('image_len', models.IntegerField(default=0, null=True)),
-                ('video', models.CharField(default='default_value', max_length=100, null=True)),
-                ('main_img_url', models.CharField(default='default_value', max_length=500, null=True)),
-                ('bullet_point_len', models.IntegerField(default=0, null=True)),
-                ('bsr1', models.CharField(default='default_value', max_length=150, null=True)),
-                ('bsr2', models.CharField(default='default_value', max_length=150, null=True)),
-                ('price', models.FloatField(default=0.0, null=True)),
-                ('mrp', models.FloatField(default=0.0, null=True)),
-                ('availability', models.CharField(default='default_value', max_length=500, null=True)),
-                ('description', models.CharField(default='default_value', max_length=3000, null=True)),
-                ('a_plus', models.CharField(default='default_value', max_length=100, null=True)),
-                ('store_link', models.CharField(default='default_value', max_length=500, null=True)),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('user', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='product_infos', to=settings.AUTH_USER_MODEL)),
-                ('product_list', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='products_list', to='scraping.productlist')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("product_id", models.CharField(max_length=100)),
+                ("status", models.CharField(default="live", max_length=100)),
+                (
+                    "title",
+                    models.CharField(
+                        default="default_value", max_length=500, null=True
+                    ),
+                ),
+                ("reviews", models.FloatField(default=0.0, null=True)),
+                ("ratings", models.FloatField(default=0.0, null=True)),
+                (
+                    "browse_node",
+                    models.CharField(
+                        default="default_value", max_length=500, null=True
+                    ),
+                ),
+                (
+                    "brand_name",
+                    models.CharField(
+                        default="default_value", max_length=100, null=True
+                    ),
+                ),
+                (
+                    "generic_name",
+                    models.CharField(
+                        default="default_value", max_length=100, null=True
+                    ),
+                ),
+                (
+                    "variations",
+                    models.CharField(
+                        default="default_value", max_length=200, null=True
+                    ),
+                ),
+                (
+                    "deal",
+                    models.CharField(
+                        default="default_value", max_length=100, null=True
+                    ),
+                ),
+                (
+                    "seller",
+                    models.CharField(default="default_value", max_length=50, null=True),
+                ),
+                ("image_len", models.IntegerField(default=0, null=True)),
+                (
+                    "video",
+                    models.CharField(
+                        default="default_value", max_length=100, null=True
+                    ),
+                ),
+                (
+                    "main_img_url",
+                    models.CharField(
+                        default="default_value", max_length=500, null=True
+                    ),
+                ),
+                ("bullet_point_len", models.IntegerField(default=0, null=True)),
+                (
+                    "bsr1",
+                    models.CharField(
+                        default="default_value", max_length=150, null=True
+                    ),
+                ),
+                (
+                    "bsr2",
+                    models.CharField(
+                        default="default_value", max_length=150, null=True
+                    ),
+                ),
+                ("price", models.FloatField(default=0.0, null=True)),
+                ("mrp", models.FloatField(default=0.0, null=True)),
+                (
+                    "availability",
+                    models.CharField(
+                        default="default_value", max_length=500, null=True
+                    ),
+                ),
+                (
+                    "description",
+                    models.CharField(
+                        default="default_value", max_length=3000, null=True
+                    ),
+                ),
+                (
+                    "a_plus",
+                    models.CharField(
+                        default="default_value", max_length=100, null=True
+                    ),
+                ),
+                (
+                    "store_link",
+                    models.CharField(
+                        default="default_value", max_length=500, null=True
+                    ),
+                ),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                (
+                    "user",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="product_infos",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "product_list",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="products_list",
+                        to="scraping.productlist",
+                    ),
+                ),
             ],
             options={
-                'unique_together': {('product_list', 'product_id')},
+                "unique_together": {("product_list", "product_id")},
             },
         ),
     ]

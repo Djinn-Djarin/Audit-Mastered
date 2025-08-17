@@ -6,13 +6,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('scraping', '0001_initial'),
+        ("scraping", "0001_initial"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='productlist',
-            name='name',
+            model_name="productlist",
+            name="name",
             field=models.CharField(max_length=255),
         ),
     ]

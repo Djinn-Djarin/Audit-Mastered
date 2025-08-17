@@ -4,7 +4,6 @@ import aiofiles
 from datetime import datetime
 
 
-
 async def csv_seller_list(data, filepath):
     if not os.path.exists(os.path.dirname(filepath)):
         os.makedirs(os.path.dirname(filepath))
@@ -34,28 +33,33 @@ async def csv_seller_list(data, filepath):
     # print(f"Data appended to {filepath}")
 
 
-
-
-
-
-
 async def csv_myntra_audit(data, filepath):
 
     if not os.path.exists(os.path.dirname(filepath)):
         os.makedirs(os.path.dirname(filepath))
-   
-    headers = ['index','style_id', "selling_price", 'review_text', 'seller',"image_url", 'variation', 'avg_rating', 'buyer_count', 'reviews_count']
+
+    headers = [
+        "index",
+        "style_id",
+        "selling_price",
+        "review_text",
+        "seller",
+        "image_url",
+        "variation",
+        "avg_rating",
+        "buyer_count",
+        "reviews_count",
+    ]
 
     file_exists = os.path.isfile(filepath) and os.stat(filepath).st_size != 0
-    async with aiofiles.open(filepath, mode='a', newline='', encoding='utf-8') as file:
+    async with aiofiles.open(filepath, mode="a", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=headers)
-        
+
         if not file_exists:
-            await file.write(','.join(headers) + '\n')
-        
-        
+            await file.write(",".join(headers) + "\n")
+
         await writer.writerow(data)
-        await file.flush()  
+        await file.flush()
 
     print(f"Data appended to {filepath}")
 
@@ -66,7 +70,7 @@ async def csv_audit_general(data, filepath):
         os.makedirs(os.path.dirname(filepath))
 
     headers = [
-        'index',
+        "index",
         "asin",
         "reviews",
         "ratings",
@@ -109,18 +113,30 @@ async def csv_flipkart_audit(data, filepath):
 
     if not os.path.exists(os.path.dirname(filepath)):
         os.makedirs(os.path.dirname(filepath))
-   
-    headers = ['index','fsn', "selling_price",'rating', 'ratings_count', 'seller_name', 'image_count',"main_img",'stock','colorVariationCount','CompartmentVariationCount','packOfVariationCount']
+
+    headers = [
+        "index",
+        "fsn",
+        "selling_price",
+        "rating",
+        "ratings_count",
+        "seller_name",
+        "image_count",
+        "main_img",
+        "stock",
+        "colorVariationCount",
+        "CompartmentVariationCount",
+        "packOfVariationCount",
+    ]
 
     file_exists = os.path.isfile(filepath) and os.stat(filepath).st_size != 0
-    async with aiofiles.open(filepath, mode='a', newline='', encoding='utf-8') as file:
+    async with aiofiles.open(filepath, mode="a", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=headers)
-        
+
         if not file_exists:
-            await file.write(','.join(headers) + '\n')
-        
-        
+            await file.write(",".join(headers) + "\n")
+
         await writer.writerow(data)
-        await file.flush()  
+        await file.flush()
 
     print(f" Data appended to {filepath}")

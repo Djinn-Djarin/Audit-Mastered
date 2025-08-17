@@ -7,54 +7,65 @@ from .save_csv import csv_audit_general
 from playwright.async_api import Page
 
 
-from typing import  Literal, Dict, Any
-from .setup_browser import ScrapingLogic
+from typing import Literal, Dict, Any
+from .bowser_config import ScrapingLogic
 
-logger = logging.getLogger('scraping')
-
+logger = logging.getLogger("scraping")
 
 
 class StatusChecker:
     def __init__(self, page: Page, asin: str):
         self.page = page
-        self.asin = asin
+        self.product_id = asin
 
-    async def check(self) -> Literal[
-        'Rush Hour', 'Suppressed', 'Live', 'Suppressed Asin Changed', 'Suppressed Detail Page Removed']:
-        status: str = 'Suppressed'
+    async def check(
+        self,
+    ) -> Literal[
+        "Rush Hour",
+        "Suppressed",
+        "Live",
+        "Suppressed Asin Changed",
+        "Suppressed Detail Page Removed",
+    ]:
+        status: str = "Suppressed"
         current_url: str = self.page.url
 
-        expected_message_start = "Oops! It's rush hour and traffic is piling up on that page."
+        expected_message_start = (
+            "Oops! It's rush hour and traffic is piling up on that page."
+        )
         rush_hour_element = await self.page.query_selector("center")
         if rush_hour_element:
             text_content = await rush_hour_element.text_content()
-            clean_text = ' '.join([line.strip() for line in text_content.splitlines() if line.strip()])
+            clean_text = " ".join(
+                [line.strip() for line in text_content.splitlines() if line.strip()]
+            )
             if clean_text.startswith(expected_message_start):
-                return 'Rush Hour'
+                return "Rush Hour"
 
-        if 'dp' in current_url:
+        if "dp" in current_url:
             suppressed_element = await self.page.query_selector(".h1")
             if suppressed_element:
-                status = 'Suppressed'
+                status = "Suppressed"
             else:
-                asin_element = self.page.locator('div[data-card-metrics-id^="tell-amazon-desktop_DetailPage_"] div[data-asin]')
+                asin_element = self.page.locator(
+                    'div[data-card-metrics-id^="tell-amazon-desktop_DetailPage_"] div[data-asin]'
+                )
                 try:
                     await asin_element.wait_for(state="visible", timeout=20000)
                     main_data_asin_val = await asin_element.get_attribute("data-asin")
-                    if main_data_asin_val == self.asin:
-                        status = 'Live'
+                    if main_data_asin_val == self.product_id:
+                        status = "Live"
                     else:
-                        status = 'Suppressed Asin Changed'
+                        status = "Suppressed Asin Changed"
                 except Exception:
-                    status = 'Suppressed Detail Page Removed'
+                    status = "Suppressed Detail Page Removed"
 
         return status
 
 
-
 class AmazonScrapingLogic(ScrapingLogic):
 
-    async def _status(self, page: Page, asin: str) :
+    async def _status(self, page: Page, asin: str):
         return await StatusChecker(page, asin).check()
 
     async def _title(self) -> str:
@@ -72,15 +83,18 @@ class AmazonScrapingLogic(ScrapingLogic):
         if await brand_name_element.count() > 0:
             await brand_name_element.wait_for(state="visible", timeout=10000)
             raw_brand = (await brand_name_element.text_content()).strip()
-            return re.sub(r'^(Visit the\s+)?(.*?)(\s+Store)?$', r'\2', raw_brand).strip()
+            return re.sub(
+                r"^(Visit the\s+)?(.*?)(\s+Store)?$", r"\2", raw_brand
+            ).strip()
         logger.info("brand name link not found")
-        return 'N/A'
-    
+        return "N/A"
+
     async def _price(self) -> str:
         price_loc = self.page.locator("span.a-price-whole")
         if await price_loc.count() > 0:
             price_text = await price_loc.first.text_content()
-            return price_text.strip() if price_text else "N/A"
+            price_text = price_text.replace(",","").strip()
+            return price_text 
         return "N/A"
 
     async def _mrp(self) -> float:
@@ -90,13 +104,13 @@ class AmazonScrapingLogic(ScrapingLogic):
             if mrp_label:
                 mrp_text = await mrp_label.text_content()
                 if mrp_text:
-                    mrp_text = mrp_text.replace('₹', '').replace(',', '').strip()
+                    mrp_text = mrp_text.replace("₹", "").replace(",", "").strip()
                     try:
                         return float(mrp_text)
                     except Exception as e:
                         print("error in mrp", e)
         except Exception:
-            logger.info(f"mrp not found {self.asin}")
+            logger.info(f"mrp not found {self.product_id}")
         return 0
 
     async def _variations(self) -> str:
@@ -108,7 +122,7 @@ class AmazonScrapingLogic(ScrapingLogic):
             "#variation_style_name"
         )
         return "Available" if await variations_locator.count() > 0 else "N/A"
-    
+
     async def _reviews(self) -> str:
         reviews_locator = self.page.locator("span#acrPopover").first
         try:
@@ -123,12 +137,20 @@ class AmazonScrapingLogic(ScrapingLogic):
         ratings_locator = self.page.locator("span#acrCustomerReviewText").first
         if await ratings_locator.count() > 0:
             ratings_text = await ratings_locator.text_content()
-            return ratings_text.split(" ")[0].replace(",", "").strip() if ratings_text else "0"
+            return (
+                ratings_text.split(" ")[0].replace(",", "").strip()
+                if ratings_text
+                else "0"
+            )
         return "0"
 
     async def _seller(self) -> str:
         seller_locator = self.page.locator("#sellerProfileTriggerId").first
-        return (await seller_locator.text_content()).strip() if await seller_locator.count() > 0 else "N/A"
+        return (
+            (await seller_locator.text_content()).strip()
+            if await seller_locator.count() > 0
+            else "N/A"
+        )
 
     async def _availability(self) -> str:
         availability_locator = self.page.locator("div#availability").first
@@ -186,7 +208,9 @@ class AmazonScrapingLogic(ScrapingLogic):
 
     async def _bullet_point_len(self) -> int:
         try:
-            ul_locator = self.page.locator("div#feature-bullets ul.a-unordered-list.a-vertical.a-spacing-mini").first
+            ul_locator = self.page.locator(
+                "div#feature-bullets ul.a-unordered-list.a-vertical.a-spacing-mini"
+            ).first
             if await ul_locator.count() > 0:
                 return await ul_locator.locator("li").count()
         except Exception as e:
@@ -196,7 +220,9 @@ class AmazonScrapingLogic(ScrapingLogic):
     async def _best_seller_rank(self) -> str:
         bsr1, bsr2 = "Not Available", "Not Available"
         try:
-            table = self.page.locator("table#productDetails_detailBullets_sections1").first
+            table = self.page.locator(
+                "table#productDetails_detailBullets_sections1"
+            ).first
             if await table.count() > 0:
                 th_elements = await table.locator("th").all()
                 best_sellers_th = None
@@ -206,10 +232,13 @@ class AmazonScrapingLogic(ScrapingLogic):
                         best_sellers_th = th
                         break
                 if best_sellers_th:
-                    best_sellers_td = await best_sellers_th.evaluate_handle("th => th.nextElementSibling")
+                    best_sellers_td = await best_sellers_th.evaluate_handle(
+                        "th => th.nextElementSibling"
+                    )
                     if best_sellers_td:
                         span_texts = await best_sellers_td.eval_on_selector_all(
-                            "li span.a-list-item span", "els => els.map(e => e.textContent.trim())"
+                            "li span.a-list-item span",
+                            "els => els.map(e => e.textContent.trim())",
                         )
                         if span_texts:
                             ranks = span_texts[:2]
@@ -248,28 +277,32 @@ class AmazonScrapingLogic(ScrapingLogic):
             bool: False if scraping should stop, True if safe to continue.
         """
         try:
-            button = self.page.locator("button", has_text=re.compile(r'continue shopping', re.IGNORECASE))
+            button = self.page.locator(
+                "button", has_text=re.compile(r"continue shopping", re.IGNORECASE)
+            )
             if await button.count() > 0 and await button.is_visible():
-                logger.info(f"'Continue Shopping' button found for {self.asin}")
+                logger.info(f"'Continue Shopping' button found for {self.product_id}")
                 try:
                     await button.click()
                     await self.page.wait_for_timeout(1000)  # small wait after click
                     return True
                 except Exception as e:
-                    logger.error(f"Failed to click 'Continue Shopping' for {self.asin}: {e}")
+                    logger.error(
+                        f"Failed to click 'Continue Shopping' for {self.product_id}: {e}"
+                    )
                     return False
             return True  # no button → safe to proceed
         except Exception as e:
-            print(f"Continue Shopping' button found {self.asin}")
-            logger.error(f"Error handling 'Continue Shopping' for {self.asin}: {e}")
+            print(f"Continue Shopping' button found {self.product_id}")
+            logger.error(
+                f"Error handling 'Continue Shopping' for {self.product_id}: {e}"
+            )
             return False
-
 
     def _scrape_result(self) -> Dict[str, Any]:
         return {
-            'index': self.worker_id + 1,
-            "asin": self.asin,
-            "status": 'Suppressed',
+            "asin": self.product_id,
+            "status": "Suppressed",
             "brand_name": "N/A",
             "browse_node": "N/A",
             "title": "N/A",
@@ -290,32 +323,34 @@ class AmazonScrapingLogic(ScrapingLogic):
             "A_plus": "N/A",
             "store_link": "N/A",
         }
-    
+
     async def _run_scraper(self) -> Dict[str, Any]:
         self.result = self._scrape_result()
-        self.result['asin'] = self.asin
+        self.result["asin"] = self.product_id
 
         if not await self._handle_continue_shopping():
             return self.result
 
-        status = await self._status(self.page, self.asin)
-        if status in ['Suppressed', 'Rush Hour']:
-            self.result['status'] = status
+        status = await self._status(self.page, self.product_id)
+        if status in ["Suppressed", "Rush Hour"]:
+            self.result["status"] = status
             await csv_audit_general(self.result, self.file_name)
             return self.result
 
         try:
-            self.result.update({
-                "status": status,
-                "brand_name": await self._brand_name(),
-                "browse_node": await self._browse_node(),
-                "title": await self._title(),
-                "reviews": await self._reviews(),
-                "ratings": await self._ratings(),
-                "variations": await self._variations(),
-                "deal": await self._deal(),
-                "seller": await self._seller(),
-            })
+            self.result.update(
+                {
+                    "status": status,
+                    "brand_name": await self._brand_name(),
+                    "browse_node": await self._browse_node(),
+                    "title": await self._title(),
+                    "reviews": await self._reviews(),
+                    "ratings": await self._ratings(),
+                    "variations": await self._variations(),
+                    "deal": await self._deal(),
+                    "seller": await self._seller(),
+                }
+            )
             self.result["image_len"] = await self._image_length()
             self.result["video"] = await self._video()
             self.result["main_img_url"] = await self._main_img_url()
@@ -339,7 +374,7 @@ class AmazonScrapingLogic(ScrapingLogic):
 
         except Exception as e:
             logger.info(f"error {e}")
-            self.result['status'] = 'Suppressed'
+            self.result["status"] = "Suppressed"
             await csv_audit_general(self.result, self.file_name)
             await self.page.close()
             gc.collect()

@@ -4,6 +4,7 @@ from django.contrib.auth.models import AnonymousUser
 
 User = get_user_model()
 
+
 class ForceAdminUserMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response

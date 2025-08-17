@@ -1,8 +1,10 @@
 import redis
 import pandas as pd
-
+import asyncio
+import json
 from django.http import HttpResponse
 from django.contrib.auth.models import User
+from django.http import StreamingHttpResponse
 
 from rest_framework import status
 from rest_framework.views import APIView
@@ -15,14 +17,14 @@ from .bulk_create_product import ProductService
 from .file_parsing import FileParser
 
 from .tasks import run_audit_task
-from .Audit.audit import RunAudit
 from .models import ProductList, ProductInfo
-from .utils import ProductListExcelExporter, ExcelExport
+from .utils import ProductListExcelExporter, ExcelExport, ping_celery
+from .Audit.utils import TaskProgress
 
 
-r = redis.Redis(host='localhost', port=6379, db=0)
-
-
+r = redis.Redis(host="localhost", port=6379, db=0)
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 # === Create a ProductList  ===
 class CreateProductList(APIView):
@@ -30,16 +32,24 @@ class CreateProductList(APIView):
 
     def post(self, request):
         name = request.data.get("list_name")
-       
-        check_product_list = ProductList.objects.filter(user=request.user, name=name).first()
+
+        check_product_list = ProductList.objects.filter(
+            user=request.user, name=name
+        ).first()
         if check_product_list:
             return Response(
-                {"status":"error", "message": "Product list already exists"}, status=status.HTTP_400_BAD_REQUEST
+                {"status": "error", "message": "Product list already exists"},
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        product_list = ProductList.objects.create(user=request.user,name=name)
+        product_list = ProductList.objects.create(user=request.user, name=name)
         return Response(
-            {"status":"success", "message": f"Product list created {product_list.id} {product_list.name}"}, status=status.HTTP_201_CREATED
+            {
+                "status": "success",
+                "message": f"Product list created {product_list.id} {product_list.name}",
+            },
+            status=status.HTTP_201_CREATED,
         )
+
 
 # === Delete a ProductList  ===
 class DeleteProductList(APIView):
@@ -50,33 +60,49 @@ class DeleteProductList(APIView):
         try:
             product_list = ProductList.objects.get(id=pk, user=request.user)
             product_list.delete()
-            return Response({"message": "Product list deleted"}, status=status.HTTP_200_OK)
+            return Response(
+                {"message": "Product list deleted"}, status=status.HTTP_200_OK
+            )
         except ProductList.DoesNotExist:
-            return Response({"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
 
 # === Get all ProductLists of a user ===
 class GetAllProductLists(APIView):
     permission_classes = []
 
-    def get(self, request,):
+    def get(
+        self,
+        request,
+    ):
         try:
             product_list = ProductList.objects.filter(user=request.user)
             if product_list.count() == 0:
-                return Response({"message": "No product lists found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"message": "No product lists found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
             data = [
-                {'id':pl.id, 
-                  'name': pl.name,
-                  "created_at": pl.created_at,
-                  "product_count": pl.products_list.count()
-            } 
-    
+                {
+                    "id": pl.id,
+                    "name": pl.name,
+                    "created_at": pl.created_at,
+                    "product_count": pl.products_list.count(),
+                }
                 for pl in product_list
-                       ]
-            return Response({"data":data, "message": "success"}, status=status.HTTP_200_OK)
+            ]
+            return Response(
+                {"data": data, "message": "success"}, status=status.HTTP_200_OK
+            )
         except ProductList.DoesNotExist:
-            return Response({"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
-# === Add Prodcuts to a ProductList ===
+
+# === Add Products to a ProductList ===
 class AddItemsToProductList(APIView):
     permission_classes = []
 
@@ -87,26 +113,30 @@ class AddItemsToProductList(APIView):
 
         if not file:
             raise ValidationError({"detail": "File is required"})
-        
+
         # Parse the file into a cleaned dataframe
-        file_validator = FileParser(file)
+
+        # Get the target product list for the current user
+        try:
+            product_list = ProductList.objects.get(id=list_id, user=request.user)
+            platform = product_list.platform
+        except ProductList.DoesNotExist:
+            return Response(
+                {"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        file_validator = FileParser(file, platform)
         try:
             cleaned_dataframe = file_validator.parse()
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Get the target product list for the current user
-        try:
-            product_list = ProductList.objects.get(id=list_id, user=request.user)
-        except ProductList.DoesNotExist:
-            return Response({"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND)
 
         product_ids = cleaned_dataframe[product_list.platform].to_list()
         # Use the platform from the existing list
         _, created_products = ProductService.bulk_create_products(
             user=request.user,
             product_ids=product_ids,
-            platform=product_list.platform,
+            platform=platform,
             product_list=product_list,
         )
 
@@ -114,11 +144,12 @@ class AddItemsToProductList(APIView):
             {
                 "status": "success",
                 "message": f"{len(created_products)} products added to list '{product_list.name}'",
-                "products": [str(p) for p in created_products]
+                "products": [str(p) for p in created_products],
             },
-            status=status.HTTP_201_CREATED
+            status=status.HTTP_201_CREATED,
         )
-    
+
+
 # === All items of a ProductList ===
 class GetProductListItems(APIView):
     permission_classes = []
@@ -144,19 +175,24 @@ class GetProductListItems(APIView):
                     product_data[field.name] = value
                 data.append(product_data)
 
-            return Response({"data": data, "message": "success"}, status=status.HTTP_200_OK)
+            return Response(
+                {"data": data, "message": "success"}, status=status.HTTP_200_OK
+            )
 
         except ProductList.DoesNotExist:
-            return Response({"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
-# === Get Excel Sheet of all the product under a list after Audit  === 
+
+# === Get Excel Sheet of all the product under a list after Audit  ===
 class GetProductListItemsExcel(APIView):
     permission_classes = []
 
     def get(self, request):
         # user = request.user
-        user = User.objects.get(username='admin')
-        product_list_id = request.query_params.get('product_list')
+        user = User.objects.get(username="admin")
+        product_list_id = request.query_params.get("product_list")
 
         if not product_list_id:
             return HttpResponse("Product list ID is required", status=400)
@@ -166,7 +202,7 @@ class GetProductListItemsExcel(APIView):
             return HttpResponse("Product list not found", status=404)
 
         df = ProductListExcelExporter.export(product_list)
-        response = self._build_excel_response(df, product_list.name,product_list_id)
+        response = self._build_excel_response(df, product_list.name, product_list_id)
         return response
 
     def _get_product_list(self, product_list_id, user):
@@ -175,9 +211,10 @@ class GetProductListItemsExcel(APIView):
         except ProductList.DoesNotExist:
             return None
 
-    def _build_excel_response(self, df, filename, product_list_id):  
-        response  = ExcelExport.export(df, filename, sheet_name = product_list_id)
+    def _build_excel_response(self, df, filename, product_list_id):
+        response = ExcelExport.export(df, filename, sheet_name=product_list_id)
         return response
+
 
 # === Run Audit for a Product List ===
 class RunAudit(APIView):
@@ -185,31 +222,46 @@ class RunAudit(APIView):
     permission_classes = []
 
     def post(self, request):
+        if not ping_celery():
+            return Response(
+                {"detail": "Celery Service is Down"}, status=status.HTTP_400_BAD_REQUEST
+            )
         product_list_id = request.data.get("product_list_id")
         if not product_list_id:
-            return Response({"detail": "Product list ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Product list ID is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         try:
-            user = User.objects.get(username='admin')
+            user = User.objects.get(username="admin")
             product_list = ProductList.objects.get(id=product_list_id, user=user)
 
-            AUDIT_INSTANCE_COUNTER = 'AUDIT_INSTANCES_'
+            AUDIT_INSTANCE_COUNTER = "AUDIT_INSTANCES_"
             r.incr(AUDIT_INSTANCE_COUNTER)
             try:
                 task = run_audit_task.delay(product_list.id)
-                return Response({
-                "message": f"Audit started for {product_list.name}",
-                "task_id": task.id
-            }, status=status.HTTP_202_ACCEPTED)
+                return Response(
+                    {
+                        "message": f"Audit started for {product_list.name}",
+                        "task_id": task.id,
+                    },
+                    status=status.HTTP_202_ACCEPTED,
+                )
             finally:
                 r.decr(AUDIT_INSTANCE_COUNTER)
 
         except ProductList.DoesNotExist:
-            return Response({"detail": "Product list not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Product list not found"}, status=status.HTTP_404_NOT_FOUND
+            )
 
-        return Response({"message": f"Audit started for {product_list.name}"}, status=status.HTTP_200_OK)
+        return Response(
+            {"message": f"Audit started for {product_list.name}"},
+            status=status.HTTP_200_OK,
+        )
+
 
 # === Check Audit Status ===
-
 class AuditTaskStatus(APIView):
     def post(self, request):
         task_id = request.data.get("task_id")
@@ -229,19 +281,87 @@ class AuditTaskStatus(APIView):
             except Exception as e:
                 safe_result = f"Unserializable result: {e}"
 
-        return Response({
-            "task_id": task_id,
-            "status": result.status,   # PENDING, STARTED, SUCCESS, FAILURE, RETRY
-            "result": safe_result
-        }, status=status.HTTP_200_OK)
+        return Response(
+            {
+                "task_id": task_id,
+                "status": result.status,  # PENDING, STARTED, SUCCESS, FAILURE, RETRY
+                "result": safe_result,
+            },
+            status=status.HTTP_200_OK,
+        )
 
-# === Streaming of an Audit over SSR ===
-class AuditStreamingSSR:
-    pass
 
-# === Global counter for a distributed product list ===
-class ProductListGloabalCounter(APIView):
-    pass
+# === Progress Bar of an Audit over SSR ===
+class AuditStreamingSSR(APIView):
+    permission_classes = []
+
+    def get(self, request, task_id):
+
+        pubsub = r.pubsub()
+        pubsub.subscribe(f"task_updates:{task_id}")  # subscribe to this task's channel
+
+        def event_stream():
+            for message in pubsub.listen():
+                if message["type"] != "message":
+                    continue
+
+                progress = json.loads(message["data"])
+                if not progress:
+                    yield b"event: error\ndata: Task not found\n\n"
+                    break
+
+                user_id = progress.get("user_id")
+                if request.user.id != user_id and not request.user.is_staff:
+                    yield b"event: error\ndata: Unauthorized\n\n"
+                    break
+
+                processed = progress.get("count", 0)
+                total = progress.get("total", 0)
+
+                yield f"data: {json.dumps(progress)}\n\n".encode("utf-8")
+
+                if total > 0 and processed >= total:
+                    yield f"event: complete\ndata: {json.dumps(progress)}\n\n".encode("utf-8")
+                    break
+
+        return StreamingHttpResponse(
+            event_stream(),
+            content_type="text/event-stream",
+            headers={"Cache-Control": "no-cache"}
+        )
+
+# === Progress Bar of All Aduit over == 
+
+class GlobalProgressBar(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        pubsub = r.pubsub()
+        # pattern subscribe to all task channels
+        pubsub.psubscribe("task_updates:*")
+
+        def event_stream():
+            for message in pubsub.listen():
+                # pattern subscription messages have type 'pmessage'
+                if message['type'] != 'pmessage':
+                    continue
+
+                data = json.loads(message['data'])
+                # you can also include the task_id from message['channel']
+                task_channel = message['channel']
+                task_id = task_channel.split(":")[1]
+                data['task_id'] = task_id
+
+                yield f"data: {json.dumps(data)}\n\n"
+
+        return StreamingHttpResponse(
+            event_stream(),
+            content_type='text/event-stream',
+            headers={"Cache-Control": "no-cache"}
+        )
+
+
+
 
 # == Get Reaudit of incomplete audits ===
 class ReauditIncompleteAudits(APIView):
@@ -255,9 +375,11 @@ class HighPriorityAudit(APIView):
 
 ### ============================================================ SYSTEM LEVEL VIEWS ====================================================== ###
 
+
 # === Audit Speed of the system ===
 class AuditSpeed(APIView):
     pass
+
 
 # === Current Running Audits ===
 class CurrentRunningAudits(APIView):
@@ -268,8 +390,10 @@ class CurrentRunningAudits(APIView):
 class AuditHealthCheckAmazon(APIView):
     def title(self, request):
         pass
+
     def price(self, request):
         pass
+
     def review(self, request):
         pass
 
@@ -277,16 +401,21 @@ class AuditHealthCheckAmazon(APIView):
 class AuditHealthCheckFlipkart(APIView):
     def title(self, request):
         pass
+
     def price(self, request):
         pass
+
     def review(self, request):
         pass
+
 
 class AuditHealthCheckMyntra(APIView):
     def title(self, request):
         pass
+
     def price(self, request):
         pass
+
     def review(self, request):
         pass
 
@@ -300,6 +429,7 @@ class IPHealthCheck(APIView):
 class CheckInternet:
     pass
 
+
 # === check Redis connection ===
 class CheckRedisConnection(APIView):
     def get(self, request):
@@ -307,18 +437,33 @@ class CheckRedisConnection(APIView):
             r.ping()
             return Response({"status": "Redis is connected"}, status=status.HTTP_200_OK)
         except redis.ConnectionError as e:
-            return Response({"status": "Redis is not connected", "error": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                {"status": "Redis is not connected", "error": str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
 
 # === Check Celery Connection ===
 class CheckCeleryConnection(APIView):
-
     def get(self, request):
+        from celery import current_app
+
         try:
-            from celery import current_app
-            if current_app.control.ping(timeout=1):
-                return Response({"status": "Celery is connected"}, status=status.HTTP_200_OK)
+            result = current_app.control.ping(timeout=1)
+            if result:
+                return Response(
+                    {"status": "Celery is connected"}, status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {"status": "No Celery workers responded"},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
         except Exception as e:
-            return Response({"status": "Celery is not connected", "error": str(e)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            return Response(
+                {"status": "Celery is not connected", "error": str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
 
 # === User and Product stats ===
@@ -327,7 +472,7 @@ class UserProductStats(APIView):
         users = User.objects.all()
         data = [{"id": user.id, "username": user.username} for user in users]
         return Response(data, status=status.HTTP_200_OK)
-    
+
     def get_user_product_stats(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -337,9 +482,10 @@ class UserProductStats(APIView):
                 "user_id": user.id,
                 "username": user.username,
                 "product_list_count": product_lists.count(),
-                "product_count": product_count
+                "product_count": product_count,
             }
             return Response(stats, status=status.HTTP_200_OK)
         except User.DoesNotExist:
-            return Response({"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND)
-    
+            return Response(
+                {"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND
+            )

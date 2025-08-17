@@ -1,6 +1,7 @@
 aiofiles==24.1.0
 aiohappyeyeballs==2.6.1
 aiohttp==3.12.15
+aioredis==2.0.1
 aiosignal==1.4.0
 amazoncaptcha==0.5.11
 amqp==5.3.1
@@ -8,6 +9,7 @@ asgiref==3.9.1
 async-timeout==5.0.1
 attrs==25.3.0
 billiard==4.2.1
+black==25.1.0
 celery==5.5.3
 certifi==2025.8.3
 charset-normalizer==3.4.3
@@ -26,11 +28,14 @@ greenlet==3.2.4
 idna==3.10
 kombu==5.5.4
 multidict==6.6.4
+mypy_extensions==1.1.0
 numpy==2.2.6
 openpyxl==3.1.5
 packaging==25.0
 pandas==2.3.1
+pathspec==0.12.1
 Pillow==9.5.0
+platformdirs==4.3.8
 playwright==1.54.0
 prompt_toolkit==3.0.51
 propcache==0.3.2
@@ -42,6 +47,7 @@ redis==5.2.1
 requests==2.30.0
 six==1.17.0
 sqlparse==0.5.3
+tomli==2.2.1
 typing_extensions==4.14.1
 tzdata==2025.2
 urllib3==2.5.0

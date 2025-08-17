@@ -1,8 +1,7 @@
-
 from django.contrib import admin
 from django.urls import path, include
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('api/', include('scraping.urls')),  # Include URLs from the scraping app
+    path("admin/", admin.site.urls),
+    path("api/", include("scraping.urls")),  # Include URLs from the scraping app
 ]

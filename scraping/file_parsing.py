@@ -3,20 +3,23 @@ from rest_framework.exceptions import ValidationError
 
 # === File Reader Classes ===
 
+
 class FileReader:
     def read(self, file):
         raise NotImplementedError
+
 
 class CsvFileReader(FileReader):
     def read(self, file):
         return pd.read_csv(file)
 
+
 class ExcelFileReader(FileReader):
     def read(self, file):
         return pd.read_excel(file)
-    
 
-# === File Parser === 
+
+# === File Parser ===
 class FileReaderFactory:
     EXTENSION_READERS = {
         ".csv": CsvFileReader,
@@ -32,25 +35,30 @@ class FileReaderFactory:
 
 
 class FileParser:
-    def __init__(self, file):
+    def __init__(self, file, col):
         self.reader = FileReaderFactory.get_reader(file.name)
         self.file = file
+        self.col = col
 
     def parse(self):
-        data=  self.reader.read(self.file)
+        data = self.reader.read(self.file)
         df = pd.DataFrame(data)
-        data_cleaner = DataFrameCleaner(df)
+        data_cleaner = DataFrameCleaner(df, self.col)
         cleaned_dataframe = data_cleaner.clean()
         return cleaned_dataframe
 
+
 # === DataFrame Cleaner ===
 
+
 class DataFrameCleaner:
-    def __init__(self, df):
+    def __init__(self, df, col):
         self.df = df
+        self.col = col
 
     def drop_na(self):
-        self.df.dropna(inplace=True)
+        if self.col in self.df.columns:
+            self.df.dropna(subset=[self.col], inplace=True)
         return self
 
     def reset_index(self):
@@ -63,10 +71,12 @@ class DataFrameCleaner:
 
 # ====================== Still need to implement ===========================
 
-# ===  Product ID Rule Generic Classes === 
+
+# ===  Product ID Rule Generic Classes ===
 class ProductIdRule:
     def validate(self, product_ids):
         raise NotImplementedError
+
 
 class StartWithRule(ProductIdRule):
     def __init__(self, prefix):
@@ -76,28 +86,35 @@ class StartWithRule(ProductIdRule):
         if self.prefix and not all(pid.startswith(self.prefix) for pid in product_ids):
             raise ValidationError(f"All product IDs must start with '{self.prefix}'.")
 
+
 class LengthRule(ProductIdRule):
     def __init__(self, length):
         self.length = length
 
     def validate(self, product_ids):
         if not all(len(pid) == self.length for pid in product_ids):
-            raise ValidationError(f"All product IDs must be exactly {self.length} characters long.")
+            raise ValidationError(
+                f"All product IDs must be exactly {self.length} characters long."
+            )
+
 
 class AlphanumericRule(ProductIdRule):
     def validate(self, product_ids):
         if not all(pid.isalnum() for pid in product_ids):
             raise ValidationError("All product IDs must be alphanumeric.")
 
+
 class NumericRule(ProductIdRule):
     def validate(self, product_ids):
         if not all(pid.isdigit() for pid in product_ids):
             raise ValidationError("All product IDs must be numeric.")
 
+
 class UniqueRule(ProductIdRule):
     def validate(self, product_ids):
         if product_ids.duplicated().any():
             raise ValidationError("Product IDs must be unique.")
+
 
 class NotNullRule(ProductIdRule):
     def __init__(self, column_name):
@@ -106,6 +123,8 @@ class NotNullRule(ProductIdRule):
     def validate(self, product_ids):
         if product_ids.isnull().any():
             raise ValidationError(f"Column '{self.column_name}' contains null values.")
+
+
 class ProductIdValidator:
     PLATFORM_RULES = {
         "amazon": [
@@ -133,7 +152,9 @@ class ProductIdValidator:
             raise ValidationError(f"Unsupported audit platform: {audit_platform}")
 
         if self.column_name not in self.df.columns:
-            raise ValidationError(f"Column '{self.column_name}' does not exist in the file.")
+            raise ValidationError(
+                f"Column '{self.column_name}' does not exist in the file."
+            )
 
         product_ids = self.df[self.column_name].astype(str)
         # Always check for nulls and uniqueness
@@ -144,4 +165,3 @@ class ProductIdValidator:
             rule.validate(product_ids)
 
         return True
-    
