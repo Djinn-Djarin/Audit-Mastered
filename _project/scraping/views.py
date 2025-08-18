@@ -1,7 +1,6 @@
-import redis
-import pandas as pd
-import asyncio
 import json
+import redis
+import requests
 from django.http import HttpResponse
 from django.contrib.auth.models import User
 from django.http import StreamingHttpResponse
@@ -28,20 +27,21 @@ User = get_user_model()
 
 # === Create a ProductList  ===
 class CreateProductList(APIView):
-    permission_classes = []
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         name = request.data.get("list_name")
+        platform = request.data.get("platform")
 
         check_product_list = ProductList.objects.filter(
-            user=request.user, name=name
+            user=request.user, name=name, platform=platform
         ).first()
         if check_product_list:
             return Response(
                 {"status": "error", "message": "Product list already exists"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        product_list = ProductList.objects.create(user=request.user, name=name)
+        product_list = ProductList.objects.create(user=request.user, name=name, platform=platform)
         return Response(
             {
                 "status": "success",
@@ -227,6 +227,12 @@ class RunAudit(APIView):
                 {"detail": "Celery Service is Down"}, status=status.HTTP_400_BAD_REQUEST
             )
         product_list_id = request.data.get("product_list_id")
+        
+        reaudit = False
+        if request.data.get("reaudit"):
+            reaudit = request.data.get("reaudit").lower() == True
+
+        product_list_id = request.data.get("product_list_id")
         if not product_list_id:
             return Response(
                 {"detail": "Product list ID is required"},
@@ -239,7 +245,7 @@ class RunAudit(APIView):
             AUDIT_INSTANCE_COUNTER = "AUDIT_INSTANCES_"
             r.incr(AUDIT_INSTANCE_COUNTER)
             try:
-                task = run_audit_task.delay(product_list.id)
+                task = run_audit_task.delay(product_list.id, reaudit)
                 return Response(
                     {
                         "message": f"Audit started for {product_list.name}",
@@ -254,11 +260,6 @@ class RunAudit(APIView):
             return Response(
                 {"detail": "Product list not found"}, status=status.HTTP_404_NOT_FOUND
             )
-
-        return Response(
-            {"message": f"Audit started for {product_list.name}"},
-            status=status.HTTP_200_OK,
-        )
 
 
 # === Check Audit Status ===
@@ -330,8 +331,8 @@ class AuditStreamingSSR(APIView):
             headers={"Cache-Control": "no-cache"}
         )
 
-# === Progress Bar of All Aduit over == 
 
+# === Progress Bar of All Aduit over == 
 class GlobalProgressBar(APIView):
     permission_classes = []
 
@@ -361,13 +362,6 @@ class GlobalProgressBar(APIView):
         )
 
 
-
-
-# == Get Reaudit of incomplete audits ===
-class ReauditIncompleteAudits(APIView):
-    pass
-
-
 # === High Prority Audit ===
 class HighPriorityAudit(APIView):
     pass
@@ -379,12 +373,6 @@ class HighPriorityAudit(APIView):
 # === Audit Speed of the system ===
 class AuditSpeed(APIView):
     pass
-
-
-# === Current Running Audits ===
-class CurrentRunningAudits(APIView):
-    pass
-
 
 # === Test the Audit Health ===
 class AuditHealthCheckAmazon(APIView):
@@ -424,11 +412,47 @@ class AuditHealthCheckMyntra(APIView):
 class IPHealthCheck(APIView):
     pass
 
+# === Get Public IP ===
+class GetPublicIP(APIView):
+    permission_classes = []
+
+    def get(self, request):
+        """
+        Get the public IP address of the server.
+        """
+        try:
+            response = requests.get("https://api.ipify.org?format=json")
+            response.raise_for_status()
+            ip_data = response.json()
+            return Response(
+                {"public_ip": ip_data["ip"]}, status=status.HTTP_200_OK
+            )
+        except requests.RequestException as e:
+            return Response(
+                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 # === Check Internet Connection ===
-class CheckInternet:
-    pass
-
+class CheckInternetConnection(APIView):
+    def get(self, request):
+        try:
+            response = requests.get("https://www.google.com", timeout=5)
+            if response.status_code == 200:
+                return Response(
+                    {"status": "Internet is connected"},
+                    status=status.HTTP_200_OK,
+                )
+            else:
+                return Response(
+                    {"status": "Internet is not connected"},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+        except requests.ConnectionError:
+            return Response(
+                {"status": "Internet is not connected"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
 # === check Redis connection ===
 class CheckRedisConnection(APIView):

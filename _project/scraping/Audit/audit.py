@@ -1,5 +1,5 @@
 import asyncio
-import aioredis
+
 import logging
 from asgiref.sync import sync_to_async
 from .bowser_config import AmazonPageManager, BrowserManager
@@ -175,14 +175,19 @@ class RunAudit:
     async def get_user(self):
         return await sync_to_async(lambda: self.product_list.user)()
 
-    async def get_product_infos(self):
+    async def get_product_infos(self, reaudit=False):
+        if reaudit:
+            status = ['Live','Suppressed', 'Suppressed Asin Chnaged']
+            return await sync_to_async(list)(
+                self.product_list.products_list.exclude(status__in = status).values_list("product_id", flat=True)
+            )
         return await sync_to_async(list)(
             self.product_list.products_list.values_list("product_id", flat=True)
         )
 
-    async def run(self, max_browsers=5, batch_size=20):
+    async def run(self, max_browsers=5, batch_size=20, reaudit=False):
         await self.load_product_list()
-        product_infos = await self.get_product_infos()
+        product_infos = await self.get_product_infos(reaudit)
         if not product_infos:
             return {"status": "error", "message": "No products found in this list"}
 

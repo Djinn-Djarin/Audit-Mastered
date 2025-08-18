@@ -1,0 +1,67 @@
+input Excel/csv file
+    under a user 
+        generate a product-list
+            for amazon/flipkart/myntra
+                for a audit type regular/ seller
+                    save product id to db
+
+
+trigger the audit background process
+    saving data to db
+    sending progress bar using SSE
+        sending scraping product info also 
+
+
+
+audit service
+    regular
+    seller
+
+    flipkart
+
+create browser
+spoofing
+batching
+checkinternet
+
+need a global counter
+
+
+
+DRF_Class_Based_Views_Hierarchy:
+  - APIView:
+      description: "Base low-level view (manual methods, max control)"
+      children:
+        - GenericAPIView:
+            description: "Adds queryset, serializer support, filtering, pagination"
+            children:
+              - Mixins:
+                  description: "Reusable behavior pieces (used WITH GenericAPIView)"
+                  children:
+                    - CreateModelMixin: "adds .create() for POST"
+                    - RetrieveModelMixin: "adds .retrieve() for GET single"
+                    - UpdateModelMixin: "adds .update(), .partial_update()"
+                    - DestroyModelMixin: "adds .destroy() for DELETE"
+                    - ListModelMixin: "adds .list() for GET list"
+              - Concrete_Generic_Views:
+                  description: "Combine GenericAPIView + mixins for common CRUD"
+                  children:
+                    - CreateAPIView: "POST only"
+                    - ListAPIView: "GET list only"
+                    - RetrieveAPIView: "GET single only"
+                    - UpdateAPIView: "PUT/PATCH only"
+                    - DestroyAPIView: "DELETE only"
+                    - ListCreateAPIView: "GET list + POST create"
+                    - RetrieveUpdateDestroyAPIView: "GET/PUT/PATCH/DELETE single item"
+        - ViewSets:
+        
+            description: "Combine mixins into a single class for full resource CRUD; used with routers"
+            children:
+              - ViewSet:
+                  description: "Base class; actions must be defined manually"
+              - GenericViewSet:
+                  description: "Combines GenericAPIView with ViewSet base; supports queryset and serializers"
+              - ReadOnlyModelViewSet:
+                  description: "Provides .list() and .retrieve() actions (read-only endpoints)"
+              - ModelViewSet:
+                  description: "Full CRUD viewset combining all mixins (list, create, retrieve, update, destroy)"

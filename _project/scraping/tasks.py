@@ -4,7 +4,7 @@ from .models import ProductList
 from .Audit.audit import RunAudit
 
 @shared_task(bind=True)
-def run_audit_task(self, productlist_id):
+def run_audit_task(self, productlist_id , reaudit=False):
     """
     Single Celery task per product list.
     Uses multiprocessing / asyncio internally to run up to 20 browser instances.
@@ -16,5 +16,5 @@ def run_audit_task(self, productlist_id):
     except ProductList.DoesNotExist:
         return {"status": "error", "message": f"ProductList {productlist_id} not found"}
 
-    result = asyncio.run(audit.run(max_browsers=1, batch_size=1))
+    result = asyncio.run(audit.run(max_browsers=1, batch_size=1, reaudit=False))
     return result

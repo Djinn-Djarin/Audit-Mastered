@@ -24,6 +24,11 @@ venv/
 .venv/
 .env
 
+
+/static/videos/
+
+
+
 # IDEs
 .vscode/
 .idea/

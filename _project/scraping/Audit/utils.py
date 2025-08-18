@@ -320,7 +320,6 @@ async def create_spoofed_context(
 
 
 # === Global Task counter === 
-import aioredis
 import asyncio
 
 import redis
