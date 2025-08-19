@@ -1,6 +1,6 @@
 <script>
     import { checkInternet } from "$lib/utils";
-
+  
     import SystemModal from "../components/SystemModal.svelte"; // ✅ Use Component Instead of Inline Modal
     let celeryStatus = false;
     let redisStatus = true;

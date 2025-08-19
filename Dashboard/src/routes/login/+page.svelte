@@ -1,9 +1,11 @@
 <script>
-    import { loginUser } from '$lib/utils.js';
+    import { loginUser } from "$lib/utils.js";
 
-    let username = 'Devendra';
-    let password = 'Kuber@121';
-    let error = '';
+    import { me } from "$lib/utils";
+    let username = "Devendra";
+    let password = "Kuber@121";
+    let error = "";
+    let user = null;
 
     async function handleLogin(event) {
         event.preventDefault();
@@ -13,6 +15,8 @@
         if (result.error) {
             error = result.error;
         }
+        user = await me();
+        console.log(user, "user");
     }
 </script>
 
@@ -28,7 +32,9 @@
         {/if}
 
         <div>
-            <label class="block text-sm font-medium text-gray-700">Username</label>
+            <label class="block text-sm font-medium text-gray-700"
+                >Username</label
+            >
             <input
                 type="text"
                 bind:value={username}
@@ -38,7 +44,9 @@
         </div>
 
         <div>
-            <label class="block text-sm font-medium text-gray-700">Password</label>
+            <label class="block text-sm font-medium text-gray-700"
+                >Password</label
+            >
             <input
                 type="password"
                 bind:value={password}

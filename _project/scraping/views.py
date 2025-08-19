@@ -33,9 +33,14 @@ class CreateProductList(APIView):
         name = request.data.get("list_name")
         platform = request.data.get("platform")
 
+        if not name and platform:
+            return Response(
+                {"status":"error", "msg":"Both List-Name and Platform are Required"}, status=status.HTTP_4
+                 )
         check_product_list = ProductList.objects.filter(
             user=request.user, name=name, platform=platform
         ).first()
+
         if check_product_list:
             return Response(
                 {"status": "error", "message": "Product list already exists"},
@@ -46,6 +51,54 @@ class CreateProductList(APIView):
             {
                 "status": "success",
                 "message": f"Product list created {product_list.id} {product_list.name}",
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+# === Add Products to a ProductList ===
+class AddItemsToProductList(APIView):
+    permission_classes = []
+
+    def post(self, request):
+        file = request.FILES.get("file")
+        list_id = request.data.get("list_id")
+        request.user = User.objects.get(username="admin")
+
+        if not file:
+            raise ValidationError({"detail": "File is required"})
+
+        # Parse the file into a cleaned dataframe
+
+        # Get the target product list for the current user
+        try:
+            product_list = ProductList.objects.get(id=list_id, user=request.user)
+            platform = product_list.platform
+        except ProductList.DoesNotExist:
+            return Response(
+                {"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        file_validator = FileParser(file, platform)
+        try:
+            cleaned_dataframe = file_validator.parse()
+        except ValidationError as e:
+            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        product_ids = cleaned_dataframe[product_list.platform].to_list()
+        # Use the platform from the existing list
+        _, created_products = ProductService.bulk_create_products(
+            user=request.user,
+            product_ids=product_ids,
+            platform=platform,
+            product_list=product_list,
+        )
+
+        return Response(
+            {
+                "status": "success",
+                "message": f"{len(created_products)} products added to list '{product_list.name}'",
+                "products": [str(p) for p in created_products],
             },
             status=status.HTTP_201_CREATED,
         )
@@ -102,52 +155,6 @@ class GetAllProductLists(APIView):
             )
 
 
-# === Add Products to a ProductList ===
-class AddItemsToProductList(APIView):
-    permission_classes = []
-
-    def post(self, request):
-        file = request.FILES.get("file")
-        list_id = request.data.get("list_id")
-        request.user = User.objects.get(username="admin")
-
-        if not file:
-            raise ValidationError({"detail": "File is required"})
-
-        # Parse the file into a cleaned dataframe
-
-        # Get the target product list for the current user
-        try:
-            product_list = ProductList.objects.get(id=list_id, user=request.user)
-            platform = product_list.platform
-        except ProductList.DoesNotExist:
-            return Response(
-                {"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND
-            )
-
-        file_validator = FileParser(file, platform)
-        try:
-            cleaned_dataframe = file_validator.parse()
-        except ValidationError as e:
-            return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-        product_ids = cleaned_dataframe[product_list.platform].to_list()
-        # Use the platform from the existing list
-        _, created_products = ProductService.bulk_create_products(
-            user=request.user,
-            product_ids=product_ids,
-            platform=platform,
-            product_list=product_list,
-        )
-
-        return Response(
-            {
-                "status": "success",
-                "message": f"{len(created_products)} products added to list '{product_list.name}'",
-                "products": [str(p) for p in created_products],
-            },
-            status=status.HTTP_201_CREATED,
-        )
 
 
 # === All items of a ProductList ===

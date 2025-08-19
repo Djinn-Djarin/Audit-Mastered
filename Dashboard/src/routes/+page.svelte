@@ -32,7 +32,7 @@
 
     <button
         on:click={toggleAddList}
-        class=" absolute top-180 right-30 rounded-full h-20 w-20 flex items-center justify-center shadow-md bg-white hover:bg-gray-50 transition border border-dashed border-gray-400"
+        class=" absolute top-180 right-30 rounded-full h-20 w-20 flex items-center justify-center shadow-md bg-white hover:bg-gray-50 transition border border-dashed border-gray-400 floating-btn"
     >
         <img
             src="/images/plus.png"
@@ -62,3 +62,15 @@
     <!-- Footer always pinned to bottom -->
     <Footer />
 </div>
+<style>
+    /* Floating animation */
+    @keyframes float {
+        0% { transform: translateY(0px); }
+        50% { transform: translateY(-60px); }
+        100% { transform: translateY(0px); }
+    }
+
+    .floating-btn {
+        animation: float 30s ease-in-out infinite;
+    }
+</style>

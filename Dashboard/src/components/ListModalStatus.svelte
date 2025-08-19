@@ -1,5 +1,5 @@
 <script>
-    import { platform } from "../lib/utils.js";
+    import { platforms } from "../lib/utils.js";
 
     export let listName;
     export let timeStamp;
@@ -9,7 +9,7 @@
     export let progress;
 
     // Lookup platform details
-    $: selectedDetails = platform.find((p) => p.name === selectedPlatform);
+    $: selectedDetails = platforms.find((p) => p.name === selectedPlatform);
 </script>
 
 <div

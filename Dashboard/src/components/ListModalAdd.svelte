@@ -1,5 +1,5 @@
 <script>
-    import { platform } from "../lib/utils.js";
+    import { platforms } from "../lib/utils.js";
  import { ApiService } from "../lib/utils.js";
 
     let listName = "My Product List";
@@ -19,7 +19,7 @@ async function handleSubmit() {
             "http://127.0.0.1:8000/api/create_product_list/",
             {
                 name: listName,
-                platform: selectedPlatform,
+                platforms: selectedPlatform,
                 file: file ? file.name : null,
             }
         );
@@ -31,7 +31,7 @@ async function handleSubmit() {
 
 
     // get platform details
-    $: selectedDetails = platform.find((p) => p.name === selectedPlatform);
+    $: selectedDetails = platforms.find((p) => p.name === selectedPlatform);
 </script>
 
 <div
@@ -63,7 +63,7 @@ async function handleSubmit() {
             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
         >
             <option value="" disabled>Select a platform</option>
-            {#each platform as p}
+            {#each platforms as p}
                 <option value={p.name}>{p.name}</option>
             {/each}
         </select>
