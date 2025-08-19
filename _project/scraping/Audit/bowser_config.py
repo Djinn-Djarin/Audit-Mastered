@@ -59,7 +59,6 @@ class ScrapingLogic:
     def _run_scraper(self):
         raise NotImplementedError
 
-
 class BrowserManager:
     def __init__(self, headless=True):
         self.headless = headless

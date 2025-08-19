@@ -16,6 +16,6 @@ class ProductListAdmin(admin.ModelAdmin):
     search_fields = ["name", "user__username"]
 
     def product_ids(self, obj):
-        return ", ".join([p.product_id for p in obj.products_list.all()])
+        return obj.products_list.count()
 
     product_ids.short_description = "Products in List"

@@ -8,9 +8,11 @@ from django.http import StreamingHttpResponse
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import ValidationError
 from celery.result import AsyncResult
+from celery.app.control import Control
+from celery import current_app
 
 from .bulk_create_product import ProductService
 from .file_parsing import FileParser
@@ -18,7 +20,7 @@ from .file_parsing import FileParser
 from .tasks import run_audit_task
 from .models import ProductList, ProductInfo
 from .utils import ProductListExcelExporter, ExcelExport, ping_celery
-from .Audit.utils import TaskProgress
+
 
 
 r = redis.Redis(host="localhost", port=6379, db=0)
@@ -51,6 +53,7 @@ class CreateProductList(APIView):
             {
                 "status": "success",
                 "message": f"Product list created {product_list.id} {product_list.name}",
+                "list_id" : product_list.id
             },
             status=status.HTTP_201_CREATED,
         )
@@ -58,13 +61,12 @@ class CreateProductList(APIView):
 
 # === Add Products to a ProductList ===
 class AddItemsToProductList(APIView):
-    permission_classes = []
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         file = request.FILES.get("file")
         list_id = request.data.get("list_id")
-        request.user = User.objects.get(username="admin")
-
+        user = request.user
         if not file:
             raise ValidationError({"detail": "File is required"})
 
@@ -72,15 +74,15 @@ class AddItemsToProductList(APIView):
 
         # Get the target product list for the current user
         try:
-            product_list = ProductList.objects.get(id=list_id, user=request.user)
+            product_list = ProductList.objects.get(id=list_id, user=user)
             platform = product_list.platform
         except ProductList.DoesNotExist:
             return Response(
                 {"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND
             )
 
-        file_validator = FileParser(file, platform)
         try:
+            file_validator = FileParser(file, platform)
             cleaned_dataframe = file_validator.parse()
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -88,7 +90,7 @@ class AddItemsToProductList(APIView):
         product_ids = cleaned_dataframe[product_list.platform].to_list()
         # Use the platform from the existing list
         _, created_products = ProductService.bulk_create_products(
-            user=request.user,
+            user=user,
             product_ids=product_ids,
             platform=platform,
             product_list=product_list,
@@ -106,25 +108,25 @@ class AddItemsToProductList(APIView):
 
 # === Delete a ProductList  ===
 class DeleteProductList(APIView):
-    permission_classes = []
+    permission_classes = [IsAuthenticated]
 
-    def delete(self, request, pk):
+    def get(self, request, pk):
         """Delete a product list by ID."""
         try:
             product_list = ProductList.objects.get(id=pk, user=request.user)
             product_list.delete()
             return Response(
-                {"message": "Product list deleted"}, status=status.HTTP_200_OK
+                {"status":"success","smg": "Product list deleted"}, status=status.HTTP_200_OK
             )
         except ProductList.DoesNotExist:
             return Response(
-                {"error": "Product list not found"}, status=status.HTTP_404_NOT_FOUND
+                {"status":"error", "msg": "Product list not found"}, status=status.HTTP_404_NOT_FOUND
             )
 
 
 # === Get all ProductLists of a user ===
 class GetAllProductLists(APIView):
-    permission_classes = []
+    permission_classes = [IsAuthenticated]
 
     def get(
         self,
@@ -139,10 +141,14 @@ class GetAllProductLists(APIView):
                 )
             data = [
                 {
-                    "id": pl.id,
-                    "name": pl.name,
+                    "list_id": pl.id,
+                    "list_name": pl.name,
                     "created_at": pl.created_at,
+                    "platform":pl.platform,
+                    "list_attributes":{
                     "product_count": pl.products_list.count(),
+
+                    }
                 }
                 for pl in product_list
             ]
@@ -155,11 +161,9 @@ class GetAllProductLists(APIView):
             )
 
 
-
-
 # === All items of a ProductList ===
 class GetProductListItems(APIView):
-    permission_classes = []
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, list_id):
         try:
@@ -194,7 +198,7 @@ class GetProductListItems(APIView):
 
 # === Get Excel Sheet of all the product under a list after Audit  ===
 class GetProductListItemsExcel(APIView):
-    permission_classes = []
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         # user = request.user
@@ -225,8 +229,7 @@ class GetProductListItemsExcel(APIView):
 
 # === Run Audit for a Product List ===
 class RunAudit(APIView):
-    authentication_classes = []
-    permission_classes = []
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         if not ping_celery():
@@ -246,7 +249,7 @@ class RunAudit(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            user = User.objects.get(username="admin")
+            user = request.user
             product_list = ProductList.objects.get(id=product_list_id, user=user)
 
             AUDIT_INSTANCE_COUNTER = "AUDIT_INSTANCES_"
@@ -267,6 +270,28 @@ class RunAudit(APIView):
             return Response(
                 {"detail": "Product list not found"}, status=status.HTTP_404_NOT_FOUND
             )
+
+
+# === Stop an Audit ===
+
+
+
+class StopCeleryTask(APIView):
+    permission_classes=[IsAuthenticated]
+    def post(self, request):
+        task_id = request.data.get("task_id")
+        if task_id:
+            try:
+                # First try graceful stop
+                current_app.control.revoke(task_id, terminate=True, signal="SIGTERM")
+                return Response({
+                    "status": "success",
+                    "msg": f"task id {task_id} requested to stop (graceful)"
+                })
+            except Exception as e:
+                return Response({"status": "error", "msg": str(e)})
+        else:
+            return Response({"status": "error", "msg": "No task_id provided"})
 
 
 # === Check Audit Status ===
@@ -300,8 +325,19 @@ class AuditTaskStatus(APIView):
 
 
 # === Progress Bar of an Audit over SSR ===
+from rest_framework.renderers import BaseRenderer
+class SSERenderer(BaseRenderer):
+    media_type = "text/event-stream"
+    format = "sse"
+    charset = None
+    render_style = "text"
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        return data
+    
 class AuditStreamingSSR(APIView):
-    permission_classes = []
+    permission_classes = [AllowAny]
+    renderer_classes = [SSERenderer]
 
     def get(self, request, task_id):
 
@@ -318,10 +354,10 @@ class AuditStreamingSSR(APIView):
                     yield b"event: error\ndata: Task not found\n\n"
                     break
 
-                user_id = progress.get("user_id")
-                if request.user.id != user_id and not request.user.is_staff:
-                    yield b"event: error\ndata: Unauthorized\n\n"
-                    break
+                # user_id = progress.get("user_id")
+                # if request.user.id != user_id and not request.user.is_staff:
+                #     yield b"event: error\ndata: Unauthorized\n\n"
+                #     break
 
                 processed = progress.get("count", 0)
                 total = progress.get("total", 0)
@@ -421,7 +457,7 @@ class IPHealthCheck(APIView):
 
 # === Get Public IP ===
 class GetPublicIP(APIView):
-    permission_classes = []
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         """
@@ -483,16 +519,16 @@ class CheckCeleryConnection(APIView):
             result = current_app.control.ping(timeout=1)
             if result:
                 return Response(
-                    {"status": "Celery is connected"}, status=status.HTTP_200_OK
+                    {"status":"success","msg": "Celery is connected"}, status=status.HTTP_200_OK
                 )
             else:
                 return Response(
-                    {"status": "No Celery workers responded"},
+                    {"status":"error","msg": "No Celery workers responded"},
                     status=status.HTTP_503_SERVICE_UNAVAILABLE,
                 )
         except Exception as e:
             return Response(
-                {"status": "Celery is not connected", "error": str(e)},
+                {"status":"error","msg": "Celery is not connected", "error": str(e)},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 

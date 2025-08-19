@@ -16,5 +16,5 @@ def run_audit_task(self, productlist_id , reaudit=False):
     except ProductList.DoesNotExist:
         return {"status": "error", "message": f"ProductList {productlist_id} not found"}
 
-    result = asyncio.run(audit.run(max_browsers=1, batch_size=1, reaudit=False))
+    result = asyncio.run(audit.run(max_browsers=10, batch_size=1, reaudit=False))
     return result

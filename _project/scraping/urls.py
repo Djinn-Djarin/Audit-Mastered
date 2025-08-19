@@ -8,9 +8,9 @@ urlpatterns = [
         name="create_product_list",
     ),
     path(
-        "get_all_product_list/",
+        "get_all_lists/",
         views.GetAllProductLists.as_view(),
-        name="get_all_product_list",
+        name="get_all_lists",
     ),
     path(
         "get_product_list_info/<int:list_id>/",
@@ -23,6 +23,7 @@ urlpatterns = [
         name="add_items_to_product_list",
     ),
     path("run_audit/", views.RunAudit.as_view(), name="create_product_list"),
+    path("stop_audit/", views.StopCeleryTask.as_view(), name="stop_celery_task"),
     path(
         "delete_list/<int:pk>/", views.DeleteProductList.as_view(), name="delete_list"
     ),
@@ -30,7 +31,7 @@ urlpatterns = [
         "audit_task_status/", views.AuditTaskStatus.as_view(), name="audit_task_status"
     ),
     # === Audit Streaming ===
-    path('tasks/sse/<str:task_id>/', views.AuditStreamingSSR.as_view(), name='task-progress-sse'),
+    path('tasks_sse/<str:task_id>/', views.AuditStreamingSSR.as_view(), name='task-progress-sse'),
     # === Global Task finder === 
     path('all_tasks/', views.GlobalProgressBar.as_view(), name='task-progress-sse'),   
 
@@ -40,4 +41,6 @@ urlpatterns = [
         views.CheckCeleryConnection.as_view(),
         name="check_celery_worker",
     ),
+
+    path('backend_ip/', views.GetPublicIP.as_view(), name='backend_ip'),
 ]

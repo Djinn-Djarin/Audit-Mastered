@@ -36,3 +36,6 @@ Models
     - get_product_infos(Product List Id) {which will help to collect the asin to Audit}
     - CreateBrowser()
     -  AmazonScrapingLogic
+
+
+reAudit of supression asins
