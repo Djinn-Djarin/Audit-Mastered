@@ -1,11 +1,12 @@
 export function load({ fetch }) {
        const lists = [
         {
-            listName: "Amazon Audit",
-            timeStamp: "2023-10-01T12:00:00Z",
-            selectedPlatform: "amazon",
-            listAttributes: {
-                totalCount: 10000,
+            list_id: "list_id",
+            list_name: "Amazon Audit",
+            created_at: "2023-10-01T12:00:00Z",
+            platform: "amazon",
+            list_attributes: {
+                product_count: 10000,
                 Live: 530,
                 "Supressed Asin Changed": 260,
                 "Supressed Page Timeout": 56,

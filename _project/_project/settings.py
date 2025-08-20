@@ -214,12 +214,17 @@ CORS_ALLOW_CREDENTIALS = True
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=2),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=6),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
 }
+from corsheaders.defaults import default_headers
 
 CORS_ALLOW_ALL_ORIGINS = True  # For dev only
 CORS_ALLOW_METHODS = ["GET", "POST", "OPTIONS"]
 CORS_ALLOW_HEADERS = ["content-type", "authorization"]
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'content-disposition',
+]
+CORS_EXPOSE_HEADERS = ['Content-Disposition']

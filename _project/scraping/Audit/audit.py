@@ -96,12 +96,13 @@ from asyncio import Queue, create_task, gather
 
 class AuditWorkers:
     """Worker that processes a list of products using asyncio and browser limiter."""
-    def __init__(self, product_infos, browser_instances, product_list, user, task_id, batch_size=20, max_browsers=20):
+    def __init__(self, product_infos, total_products, browser_instances, product_list, user, task_id, batch_size=20, max_browsers=20):
         self.product_infos = product_infos
         self.browser_instances = browser_instances
         self.saver = ResultSaver(product_list=product_list, user=user, batch_size=batch_size)
         self.limiter = BrowserLimiter(max_browsers=max_browsers)
         self.task_progress = TaskProgress(task_id) if task_id else None
+        self.total_products = total_products
 
     async def worker(self, queue: Queue):
         while True:
@@ -139,7 +140,7 @@ class AuditWorkers:
 
         # Initialize task progress (sync)
         if self.task_progress:
-            self.task_progress.init_task(total=len(self.product_infos), user_id=self.saver.user.id)
+            self.task_progress.init_task(total=self.total_products, user_id=self.saver.user.id)
 
         # Start workers
         tasks = [create_task(self.worker(queue)) for _ in range(self.browser_instances)]
@@ -177,17 +178,19 @@ class RunAudit:
 
     async def get_product_infos(self, reaudit=False):
         if reaudit:
-            status = ['Live','Suppressed', 'Suppressed Asin Chnaged']
+            status = ['Live','Suppressed', 'Suppressed Asin Changed']
             return await sync_to_async(list)(
                 self.product_list.products_list.exclude(status__in = status).values_list("product_id", flat=True)
             )
-        return await sync_to_async(list)(
-            self.product_list.products_list.values_list("product_id", flat=True)
-        )
+        else:
+            return await sync_to_async(list)(
+                self.product_list.products_list.values_list("product_id", flat=True)
+            )
 
-    async def run(self, max_browsers, batch_size, reaudit=False):
+    async def run(self,reaudit, max_browsers, batch_size, ):
         await self.load_product_list()
         product_infos = await self.get_product_infos(reaudit)
+        print(f"product infos {len(product_infos)} reAudit is {reaudit}")
         if not product_infos:
             return {"status": "error", "message": "No products found in this list"}
 
@@ -205,6 +208,7 @@ class RunAudit:
         workers = [
             AuditWorkers(
                 product_infos=chunk,
+                total_products = total_products,
                 browser_instances=1,
                 product_list=self.product_list,
                 user=user,

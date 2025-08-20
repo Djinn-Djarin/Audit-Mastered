@@ -1,38 +1,70 @@
 <script>
-    import { platforms } from "../lib/utils.js";
- import { ApiService } from "../lib/utils.js";
+    import { createEventDispatcher } from "svelte";
 
+
+    import { platforms, addListName, addItemsToList } from "../lib/utils.js";
+    import { toast } from "svelte-sonner";
+
+
+    const dispatch = createEventDispatcher()
     let listName = "My Product List";
     let selectedPlatform = "amazon";
     let file = null;
 
     function handleFileChange(e) {
         file = e.target.files[0];
-        // Handle form submission
     }
-
-
 
 async function handleSubmit() {
     try {
-        const data = await ApiService.post(
-            "http://127.0.0.1:8000/api/create_product_list/",
-            {
-                name: listName,
-                platforms: selectedPlatform,
-                file: file ? file.name : null,
+        const addList = await addListName(listName, selectedPlatform);
+        console.log("addListName:", addList);
+
+        if (addList.status !== "success") {
+            toast.error(`Failed to create list: ${listName}`);
+            return;
+        }
+
+        toast.success(`${listName} List created!`);
+
+        const listId = addList.list_id;
+
+        // Upload file if it exists
+        if (listId && file) {
+            const addItems = await addItemsToList(listId, file);
+            console.log("addItems:", addItems);
+
+            if (addItems.status !== "success") {
+                toast.error("File upload failed. List created without items.");
             }
-        );
-        console.log("Success:", data);
+        }
+
+        // Build the object to send to parent
+        const newList = {
+            list_id: listId,
+            list_name: listName,
+            created_at: new Date().toISOString(), // or use returned value from API
+            platform: selectedPlatform,
+            list_attributes: {
+                product_count: file ? 1 : 0 // or actual count if API returns it
+            }
+        };
+
+        // Dispatch both close and the new list to parent
+        dispatch("add", newList);
+        dispatch("close");
     } catch (err) {
         console.error("API request failed:", err);
+        toast.error("Something went wrong.");
     }
 }
+
 
 
     // get platform details
     $: selectedDetails = platforms.find((p) => p.name === selectedPlatform);
 </script>
+
 
 <div
     class="rounded-xl p-6 shadow-lg border border-gray-200 w-96 flex flex-col space-y-5 transition"

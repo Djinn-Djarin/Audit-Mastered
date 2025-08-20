@@ -5,6 +5,7 @@ from django.http import HttpResponse
 from django.contrib.auth.models import User
 from django.http import StreamingHttpResponse
 
+from rest_framework.renderers import BaseRenderer
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -84,10 +85,13 @@ class AddItemsToProductList(APIView):
         try:
             file_validator = FileParser(file, platform)
             cleaned_dataframe = file_validator.parse()
+            print(f"{len(cleaned_dataframe)} len cleaned dataframe")
         except ValidationError as e:
             return Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         product_ids = cleaned_dataframe[product_list.platform].to_list()
+
+        print(f"{len(product_ids)} len product ids")
         # Use the platform from the existing list
         _, created_products = ProductService.bulk_create_products(
             user=user,
@@ -124,7 +128,7 @@ class DeleteProductList(APIView):
             )
 
 
-# === Get all ProductLists of a user ===
+# === Get all Product Lists of a user ===
 class GetAllProductLists(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -145,8 +149,10 @@ class GetAllProductLists(APIView):
                     "list_name": pl.name,
                     "created_at": pl.created_at,
                     "platform":pl.platform,
-                    "list_attributes":{
+                    "list_attributes":
+                    {
                     "product_count": pl.products_list.count(),
+                    "count":None,
 
                     }
                 }
@@ -202,9 +208,9 @@ class GetProductListItemsExcel(APIView):
 
     def get(self, request):
         # user = request.user
-        user = User.objects.get(username="admin")
-        product_list_id = request.query_params.get("product_list")
 
+        product_list_id = request.query_params.get("product_list_id")
+        user = request.user
         if not product_list_id:
             return HttpResponse("Product list ID is required", status=400)
 
@@ -223,7 +229,7 @@ class GetProductListItemsExcel(APIView):
             return None
 
     def _build_excel_response(self, df, filename, product_list_id):
-        response = ExcelExport.export(df, filename, sheet_name=product_list_id)
+        response = ExcelExport.export(df, filename,)
         return response
 
 
@@ -237,10 +243,13 @@ class RunAudit(APIView):
                 {"detail": "Celery Service is Down"}, status=status.HTTP_400_BAD_REQUEST
             )
         product_list_id = request.data.get("product_list_id")
+      
+    
         
-        reaudit = False
-        if request.data.get("reaudit"):
-            reaudit = request.data.get("reaudit").lower() == True
+        reaudit = request.data.get("reAudit")
+        
+        print(f"reaudit is {reaudit}")
+        
 
         product_list_id = request.data.get("product_list_id")
         if not product_list_id:
@@ -256,6 +265,10 @@ class RunAudit(APIView):
             r.incr(AUDIT_INSTANCE_COUNTER)
             try:
                 task = run_audit_task.delay(product_list.id, reaudit)
+                product_list.task_id = task.id  
+                product_list.is_audit_running = True
+                product_list.save(update_fields=["task_id", "is_audit_running"])
+                
                 return Response(
                     {
                         "message": f"Audit started for {product_list.name}",
@@ -274,16 +287,16 @@ class RunAudit(APIView):
 
 # === Stop an Audit ===
 
-
-
 class StopCeleryTask(APIView):
     permission_classes=[IsAuthenticated]
     def post(self, request):
         task_id = request.data.get("task_id")
+
         if task_id:
             try:
                 # First try graceful stop
                 current_app.control.revoke(task_id, terminate=True, signal="SIGTERM")
+                ProductList.objects.filter(user=request.user, task_id=task_id).update(task_id=None)
                 return Response({
                     "status": "success",
                     "msg": f"task id {task_id} requested to stop (graceful)"
@@ -292,6 +305,36 @@ class StopCeleryTask(APIView):
                 return Response({"status": "error", "msg": str(e)})
         else:
             return Response({"status": "error", "msg": "No task_id provided"})
+
+# === get all running celery tasks ===
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+
+class RunningAudits(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            user = request.user
+            running_audits = ProductList.objects.filter(
+                is_audit_running=True, user=user
+            ).values("id", "task_id", "name", "created_at")
+
+            return Response({
+            "status": "success",
+            "running_audits": [
+                {"list_id": r["id"], "task_id": r["task_id"]}
+                for r in running_audits if r["task_id"] is not None
+            ]
+        })
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "msg": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 # === Check Audit Status ===
@@ -325,7 +368,7 @@ class AuditTaskStatus(APIView):
 
 
 # === Progress Bar of an Audit over SSR ===
-from rest_framework.renderers import BaseRenderer
+
 class SSERenderer(BaseRenderer):
     media_type = "text/event-stream"
     format = "sse"

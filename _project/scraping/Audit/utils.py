@@ -341,6 +341,7 @@ class TaskProgress:
         self.redis.set(f"task_status:{self.task_id}", "running")
         self.redis.sadd("active_tasks", self.task_id)
         self.publish_update()
+        print(f"total product {total}")
 
     def increment(self, amount: int = 1):
         self.redis.incrby(f"task_counter:{self.task_id}", amount)

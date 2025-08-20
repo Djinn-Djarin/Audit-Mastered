@@ -1,19 +1,52 @@
 <script>
-    import ListModal from "../components/ListModalStatus.svelte";
+    import { onMount } from "svelte";
     import ListModalAdd from "../components/ListModalAdd.svelte";
+    import ListModalStatus from "../components/ListModalStatus.svelte";
     import Header from "../components/Header.svelte";
     import Footer from "../components/Footer.svelte";
-      const videoSrc = '/videos/lofi-animation.mp4';
-    // data passed from +page.js
-    export let data;
-    const { lists } = data;
 
+    import { getAllLists, auditTaskIDs } from "$lib/utils";
+
+    // export let data;
+    // const { lists } = data;
+
+    let lists = [];
     let isAddList = false;
 
     function toggleAddList() {
         isAddList = !isAddList;
     }
+
+    onMount(async () => {
+        let result = await getAllLists();
+        lists = result.data;
+        // console.log(lists, "user lists");
+    });
+
+    function handleDeleted(event) {
+        const { list_id } = event.detail;
+        // Remove the deleted list from the array
+        lists = lists.filter((list) => list.list_id !== list_id);
+    }
+
+    onMount(async () => {
+        const res = await auditTaskIDs(); // calls RunningAudits API
+        console.log("Running audits from backend:", res);
+
+        if (res?.running_audits?.length > 0) {
+            localStorage.setItem(
+                "audit_tasks",
+                JSON.stringify(res.running_audits),
+            );
+        } else {
+            localStorage.removeItem("audit_tasks");
+        }
+    });
 </script>
+
+<svelte:head>
+     <title>Kuber Audit Panel</title>
+</svelte:head>
 
 <div class="flex flex-col min-h-screen bg-gray-100">
     <!-- Header always on top -->
@@ -23,23 +56,29 @@
     <main
         class="flex-1 flex flex-wrap gap-6 px-6 py-10 items-start justify-center"
     >
-        {#each lists as list}
-            <ListModal {...list} />
-        {/each}
-
-        <!-- Add List Button -->
+        {#if lists.length > 0}
+            {#each lists as list (list.list_id)}
+                <ListModalStatus {...list} on:deleted={handleDeleted} />
+            {/each}
+        {:else}
+            <p>Create a list</p>
+        {/if}
     </main>
 
+  <div class="relative w-full h-[400px] flex items-center justify-center">
     <button
         on:click={toggleAddList}
-        class=" absolute top-180 right-30 rounded-full h-20 w-20 flex items-center justify-center shadow-md bg-white hover:bg-gray-50 transition border border-dashed border-gray-400 floating-btn"
+        class="rounded-full h-20 w-20 flex items-center justify-center shadow-xl bg-gray-200 transition border border-dashed border-gray-400 
+               lg:floating-btn"
     >
         <img
             src="/images/plus.png"
             alt="Add list"
-            class="w-10 h-10 items-center"
+            class="w-10 h-10"
         />
     </button>
+</div>
+
 
     <!-- Modal Overlay -->
     {#if isAddList}
@@ -53,7 +92,10 @@
             <!-- Modal Content -->
             <div class="relative z-10">
                 <div class="bg-white rounded-lg p-6">
-                    <ListModalAdd on:close={() => (isAddList = false)} />
+                    <ListModalAdd
+                        on:close={() => (isAddList = false)}
+                        on:add={(e) => (lists = [...lists, e.detail])}
+                    />
                 </div>
             </div>
         </div>
@@ -62,15 +104,20 @@
     <!-- Footer always pinned to bottom -->
     <Footer />
 </div>
+
 <style>
     /* Floating animation */
-    @keyframes float {
-        0% { transform: translateY(0px); }
-        50% { transform: translateY(-60px); }
-        100% { transform: translateY(0px); }
+    @keyframes infinity {
+        to {
+            offset-distance: 100%;
+        }
     }
 
     .floating-btn {
-        animation: float 30s ease-in-out infinite;
+        offset-path: path(
+            "M 400,200 C 100,0 100,400 400,200 C 700,0 700,400 400,200"
+        );
+        offset-rotate: 0deg; /* keep it upright instead of rotating */
+        animation: infinity 30s linear infinite;
     }
 </style>

@@ -25,14 +25,24 @@ class ProductListExcelExporter:
 
     @staticmethod
     def export(product_list: ProductList):
-        product_items = product_list.products.all()
+        product_items = product_list.products_list.all()
         data = [
             {
-                "Product ID": item.product_info.product_id,
-                "Title": item.product_info.title,
-                "Price": item.product_info.price,
-                "Status": item.product_info.status,
-                "Brand": item.product_info.brand_name,
+                "Product ID": item.product_id,
+                "Title": item.title,
+                "Price": item.price,
+                "MRP": item.mrp,
+                "Availability": item.availability,
+                "Status": item.status,
+                "Reviews": item.reviews,
+                "Ratings": item.ratings,
+                "deal": item.deal,
+                "Brand": item.brand_name,
+                "Browsr Node": item.browse_node,
+                "Variations": item.variations,
+                "Seller": item.seller,
+                "Variations": item.variations,
+                "Main Image": item.main_img_url,
             }
             for item in product_items
         ]
@@ -47,7 +57,11 @@ class ExcelExport:
         response = HttpResponse(
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        response["Content-Disposition"] = f'attachment; filename="{filename}.xlsx"'
+        
+        import urllib.parse
+
+        safe_filename = urllib.parse.quote(f"{filename}.xlsx")
+        response["Content-Disposition"] = f'attachment; filename="{safe_filename}"'
         with pd.ExcelWriter(response, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, sheet_name="Products")
         return response

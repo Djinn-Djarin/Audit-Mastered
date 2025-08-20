@@ -1,13 +1,21 @@
 <script>
-    import { checkInternet } from "$lib/utils";
+    import { getClientIP, getBackendIP } from "$lib/utils";
+    import { onMount } from "svelte";
   
     import SystemModal from "../components/SystemModal.svelte"; // ✅ Use Component Instead of Inline Modal
-    let celeryStatus = false;
-    let redisStatus = true;
-    const clientIP = "127.0.0.1";
-    const backendIP = "127.0.0.1";
+    import { get } from "svelte/store";
+  
+    let clientIP = "127.0.0.1";
+    let backendIP = "127.0.0.1";
 
     let showSystemMonitor = false;
+
+  
+    onMount(async () =>{
+        clientIP = await getClientIP()
+        backendIP = await getBackendIP()
+        
+    })
 </script>
 
 <!-- App Bar -->
@@ -27,25 +35,6 @@
     </div>
 
     <!-- Services -->
-    <div class="flex flex-wrap items-center gap-4">
-        <!-- Celery -->
-        <div class="flex items-center space-x-2">
-            <span class="text-sm font-medium text-gray-700">Celery</span>
-            <div
-                class={`h-3.5 w-3.5 rounded-full border-2 border-white shadow-sm ${
-                    celeryStatus ? "bg-green-700 animate-pulse" : "bg-red-500"
-                }`}
-            ></div>
-        </div>
-        <!-- Redis -->
-        <div class="flex items-center space-x-2">
-            <span class="text-sm font-medium text-gray-700">Redis</span>
-            <div
-                class={`h-3.5 w-3.5 rounded-full border-2 border-white shadow-sm ${
-                    redisStatus ? "bg-green-700 animate-pulse" : "bg-red-500"
-                }`}
-            ></div>
-        </div>
-    </div>
+  
 
 </div>

@@ -95,7 +95,7 @@ class AmazonScrapingLogic(ScrapingLogic):
             price_text = await price_loc.first.text_content()
             price_text = price_text.replace(",","").strip()
             return price_text 
-        return "N/A"
+        return 0
 
     async def _mrp(self) -> float:
         try:

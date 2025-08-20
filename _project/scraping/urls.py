@@ -32,8 +32,13 @@ urlpatterns = [
     ),
     # === Audit Streaming ===
     path('tasks_sse/<str:task_id>/', views.AuditStreamingSSR.as_view(), name='task-progress-sse'),
-    # === Global Task finder === 
-    path('all_tasks/', views.GlobalProgressBar.as_view(), name='task-progress-sse'),   
+    # === GET SSE Streaming of ALL Tasks === 
+    path('all_tasks/', views.GlobalProgressBar.as_view(), name='task-progress-sse'), 
+    # === get celery task ids for a user ===
+    path('all_task_ids/', views.RunningAudits.as_view(), name='all_task_ids'), 
+
+
+    path("export-audit/", views.GetProductListItemsExcel.as_view(), name="export_audit"),
 
     # === Check Celery Worker ===
     path(

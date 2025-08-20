@@ -20,6 +20,9 @@ class ProductList(models.Model):
     )
     name = models.CharField(max_length=255, blank=True, null=True)
     platform = models.CharField(max_length=100, default="amazon")
+    task_id = models.CharField(max_length=100, null= True, blank=True)
+    is_audit_running = models.BooleanField(default=False)
+    is_audited_once = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
@@ -32,7 +35,7 @@ class ProductList(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return self.name
+        return f"{self.name }({self.id})"
 
 
 class ProductInfo(models.Model):

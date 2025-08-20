@@ -12,7 +12,7 @@ class ProductInfoAdmin(admin.ModelAdmin):
 
 @admin.register(ProductList)
 class ProductListAdmin(admin.ModelAdmin):
-    list_display = ["name", "user", "created_at", "product_ids"]
+    list_display = ["id","name", "user", "created_at", "product_ids","is_audit_running", "is_audited_once","task_id"]
     search_fields = ["name", "user__username"]
 
     def product_ids(self, obj):
