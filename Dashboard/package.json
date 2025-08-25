@@ -19,7 +19,9 @@
 		"vite": "^7.0.4"
 	},
 	"dependencies": {
+		"@lottiefiles/dotlottie-svelte": "^0.7.1",
 		"jwt-decode": "^4.0.0",
+		"lottie-web": "^5.13.0",
 		"svelte-sonner": "^1.0.5"
 	}
 }

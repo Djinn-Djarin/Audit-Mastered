@@ -1,90 +1,93 @@
 <script>
-    import { loginUser, me } from "$lib/utils.js";
+  import { onMount, onDestroy } from "svelte";
+  import Walking from "../../components/Walking.svelte";
+  import { loginUser, me } from "$lib/utils.js";
 
-    let username = "Devendra";
-    let password = "Kuber@121";
-    let error = "";
-    let user = null;
+  let src = [
+  
+    "/images/Moody Dog.json",
+    "/images/Moody Giraffe.json",
+  ];
 
-    async function handleLogin(event) {
-        event.preventDefault();
+  let currentSrc = src[0];
+  let index = 0;
 
-        const result = await loginUser(username, password);
+  // Use onMount to ensure reactivity inside Svelte
+  onMount(() => {
+    const interval = setInterval(() => {
+      index = (index + 1) % src.length;
+      currentSrc = src[index]; // reassign triggers update
+    }, 5000);
 
-        if (result.error) {
-            error = result.error;
-            return;
-        }
+    onDestroy(() => clearInterval(interval));
+  });
 
-        user = await me();
-        // console.log(user, "user");
+  let username = "";
+  let password = "";
+  let error = "";
+  let user = null;
+
+  async function handleLogin(event) {
+    event.preventDefault();
+    const result = await loginUser(username, password);
+    if (result.error) {
+      error = result.error;
+      return;
     }
+  }
 </script>
 
-<div class="flex min-h-screen">
-    <!-- Left image side -->
-    <div class="w-3/5 relative hidden md:block">
-        <img
-            src="/images/bird.jpg"
-            alt="Login Background"
-            class="object-cover w-full h-full"
+
+
+
+<svelte:head>
+    <title>Kuber Audit Login</title>
+</svelte:head>
+
+<div class="relative h-screen w-screen overflow-hidden">
+  <!-- Fullscreen Walking -->
+  <div class="absolute ">
+    <Walking src={currentSrc} />
+  </div>
+
+  <!-- Login card -->
+  <div class="absolute right-10 top-1/2 -translate-y-1/2 flex items-center justify-center">
+    <form
+      on:submit|preventDefault={handleLogin}
+      class="flex flex-col bg-white p-10 rounded-xl w-96 max-w-md space-y-6"
+    >
+      {#if error}
+        <p class="text-sm text-red-600 text-center">{error}</p>
+      {/if}
+
+      <div>
+        <input
+          type="text"
+          bind:value={username}
+          required
+          placeholder="username"
+          class="mt-1 block w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-black"
         />
-        <!-- Optional overlay for better text contrast -->
-        <!-- <div class="absolute inset-0 bg-black/30"></div> -->
-    </div>
+      </div>
 
-    <!-- Right login card -->
-    <div class="w-full md:w-2/5 flex items-center justify-center bg-white">
-        <form
-            on:submit|preventDefault={handleLogin}
-            class=" flex flex-col bg-gray-100 p-10 rounded-xl shadow-sm w-full max-w-md space-y-6"
-        >
-        
+      <div>
+        <input
+          type="password"
+          bind:value={password}
+          required
+          placeholder="password"
+          class="mt-1 block w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-black"
+        />
+      </div>
 
-            {#if error}
-                <p class="text-sm text-black text-center">{error}</p>
-            {/if}
-
-            <div>
-           
-                <input
-                    type="text"
-                    bind:value={username}
-                    required
-                    class="mt-1 block w-full px-4 py-2 border border-gray-300  rounded-lg focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-black bg-white"
-                />
-            </div>
-
-            <div>
-        
-                <input
-                    type="password"
-                    bind:value={password}
-                    required
-                    class="mt-1 block w-full px-4 py-2 border  border-gray-300 rounded-lg  focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm text-black bg-white"
-                />
-            </div>
-
-            <button
-                type="submit"
-                class="w-32 mx-auto bg-gray-300 text-black py-2 rounded-lg font-medium "
-            >
-                Login
-            </button>
-        </form>
-    </div>
+      <button
+        type="submit"
+        class="w-32 mx-auto bg-[#41636d] border border-gray-200 text-white py-2 rounded-lg font-medium"
+      >
+        Login
+      </button>
+    </form>
+  </div>
 </div>
 
-<style>
-    /* Optional: make the left image full height and cover */
-    @media (min-width: 768px) {
-        .object-cover {
-            height: 100vh;
-        }
-    }
 
-    a{
-        color: #ac5838;
-        color: #ac5938b4;
-    }
-</style>

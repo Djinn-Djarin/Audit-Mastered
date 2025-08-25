@@ -20,7 +20,7 @@
 
 <!-- App Bar -->
 <div
-    class="w-full flex flex-col md:flex-row md:items-center md:justify-between gap-4 px-6 py-3 bg-white shadow-md border-b border-gray-200"
+    class="w-full flex flex-col md:flex-row md:items-center md:justify-between gap-4 px-6 py-3 bg-gray-100 shadow-md border-b border-gray-200"
 >
     <!-- Backend + Client IPs -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:space-x-6 gap-2 sm:gap-0">

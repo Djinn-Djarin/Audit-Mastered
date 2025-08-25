@@ -1,6 +1,8 @@
 // src/lib/utils.ts
 import { goto } from '$app/navigation';
-import { writable } from 'svelte/store';
+
+
+
 // === Platforms (data only, single responsibility) ===
 export const platforms = [
     { name: 'amazon', img: "/images/amazon.svg", color: "#db4747cc" },
@@ -20,72 +22,67 @@ export async function checkInternet(): Promise<boolean> {
     }
 }
 
-// === Token Service (single responsibility: manage JWT tokens) ===
+
+// === Token Service (cookie-based, no localStorage) ===
 export class TokenService {
-    static getAccessToken(): string | null {
-        return localStorage.getItem("access");
-    }
-
-    static getRefreshToken(): string | null {
-        return localStorage.getItem("refresh");
-    }
-
-    static setAccessToken(token: string) {
-        localStorage.setItem("access", token);
-    }
-    static setRefreshToken(token: string) {
-        localStorage.setItem("refresh", token);
-    }
-
-    static clearTokens() {
-        localStorage.removeItem("access");
-        localStorage.removeItem("refresh");
-    }
-
-    static async refreshAccessToken(): Promise<string | null> {
-        const refresh = this.getRefreshToken();
-        // console.log("Refresh token in storage:", refresh);
-
-        if (!refresh) return null;
-
+  
+    static async refreshAccessToken(): Promise<boolean> {
         try {
-            const res = await fetch("http://127.0.0.1:8000/api/token/refresh/", {
+            const res = await fetch(`/api/token/refresh/`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ refresh }),
+                credentials: "include", // send cookies
             });
 
-            if (!res.ok) return null;
-
-            const data = await res.json();
-            this.setAccessToken(data.access);
-            TokenService.setRefreshToken(data.refresh);
-            return data.access;
+            return res.ok; // Django updates cookies if refresh works
         } catch {
-            return null;
+            return false;
         }
     }
+
+    /**
+     * Clear tokens by calling logout endpoint (which deletes cookies).
+     */
+    static async clearTokens(): Promise<void> {
+        try {
+            await fetch(`/api/logout/`, {
+                method: "POST",
+                credentials: "include",
+            });
+        } catch {
+            // ignore errors
+        }
+    }
+     
 }
 
+
 // === API Service (single responsibility: API requests with automatic token refresh) ===
+// === API Service (always send cookies) ===
 export class ApiService {
-    private static BASE_URL = "http://127.0.0.1:8000";
+    private static async fetchWithAuth(endpoint: string, options: RequestInit): Promise<Response> {
+        const url = `${endpoint}`;
 
-    private static async fetchWithToken(endpoint: string, options: RequestInit): Promise<Response> {
-        const url = `${this.BASE_URL}${endpoint}`;
-        let accessToken = TokenService.getAccessToken();
+        const res = await fetch(url, {
+            ...options,
+            credentials: "include", // important: send Django cookies
+        });
 
-        options.headers = {
-            ...options.headers,
-            Authorization: `Bearer ${accessToken}`,
-        };
+        // If 401 Unauthorized, try refresh then retry
+        if (res.status === 401) {
+            const refreshed = await TokenService.refreshAccessToken();
+            if (refreshed) {
+                return fetch(url, {
+                    ...options,
+                    credentials: "include",
+                });
+            }
+        }
 
-        const res = await fetch(url, options);
         return res;
     }
 
     static async get(endpoint: string) {
-        const res = await this.fetchWithToken(endpoint, { method: "GET" });
+        const res = await this.fetchWithAuth(endpoint, { method: "GET" });
         if (!res.ok) throw new Error(JSON.stringify(await res.json()));
         return res.json();
     }
@@ -94,7 +91,7 @@ export class ApiService {
         const headers: Record<string, string> = {};
         if (!isFormData) headers["Content-Type"] = "application/json";
 
-        const res = await this.fetchWithToken(endpoint, {
+        const res = await this.fetchWithAuth(endpoint, {
             method: "POST",
             headers: isFormData ? undefined : headers,
             body: isFormData ? body : JSON.stringify(body),
@@ -103,27 +100,20 @@ export class ApiService {
         return res.json();
     }
 
-    // New method for downloading Excel
     static async downloadExcel(endpoint: string, body: any = null, isPost = false) {
         const options: RequestInit = {
             method: isPost ? "POST" : "GET",
-            headers: {
-                Authorization: `Bearer ${TokenService.getAccessToken()}`,
-            },
+            credentials: "include",
         };
 
         if (isPost) {
             options.body = JSON.stringify(body);
-            options.headers = {
-                ...options.headers,
-                "Content-Type": "application/json",
-            };
+            options.headers = { "Content-Type": "application/json" };
         }
 
-        const res = await fetch(`${this.BASE_URL}${endpoint}`, options);
+        const res = await this.fetchWithAuth(endpoint, options);
         if (!res.ok) throw new Error("Failed to download Excel");
 
-        // Get the blob once
         const blob = await res.blob();
 
         // Extract filename from Content-Disposition header
@@ -133,6 +123,7 @@ export class ApiService {
             const match = disposition.match(/filename="?(.+?)"?$/);
             if (match?.[1]) filename = decodeURIComponent(match[1]);
         }
+
         // Trigger download
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -143,66 +134,70 @@ export class ApiService {
         a.remove();
         window.URL.revokeObjectURL(url);
     }
-
 }
 
 
-// === Auth Utilities (login/logout) ===
+// === Auth Utilities (login) ===
 export async function loginUser(username: string, password: string) {
     try {
-        const res = await fetch('http://127.0.0.1:8000/api/token/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
+        const res = await fetch(`/api/token/`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, password }),
+            credentials: "include", // send & receive cookies
         });
 
-        if (!res.ok) return { error: 'Invalid username or password' };
+        if (!res.ok) {
+            return { error: "Invalid username or password" };
+        }
 
-        const data = await res.json();
-        localStorage.setItem('access', data.access);
-        localStorage.setItem('refresh', data.refresh);
-        goto('/'); // redirect after login
+        // At this point, Django has already set the cookies
+        // Optionally you can fetch the current user
+        try {
+            await me(); // assuming `me()` calls /api/me/ with credentials: 'include'
+        } catch {
+            // ignore for now, or handle if you want to show user profile immediately
+        }
+
+        // Redirect to home after successful login
+        goto("/");
 
         return { success: true };
-    } catch {
-        return { error: 'Something went wrong. Please try again.' };
+    } catch (err) {
+        return { error: "Something went wrong. Please try again." };
     }
 }
+
 
 
 // === Logout ===
 export async function handleLogout() {
-    const refreshToken = TokenService.getRefreshToken();
-
     try {
-        if (refreshToken) {
-
-            await ApiService.post('/api/logout', { refresh: refreshToken });
-        }
-
-        else {
-            console.warn("No refresh token found, clearing tokens anyway");
-        }
+        // Django will read the refresh token from HttpOnly cookie
+           await TokenService.clearTokens();
     } catch (err) {
-        console.error('Logout request failed:', err);
+        console.error("Logout request failed:", err);
     } finally {
-        TokenService.clearTokens();
-        goto('/login', { replaceState: true });
+    
+        goto("/login", { replaceState: true });
     }
 }
+
 
 
 // === Current User Info ===
 export async function me() {
     try {
         const response = await ApiService.get("/api/me/");
-        localStorage.setItem("userFullName", response.full_name);
+        // If you need the name in memory, return it
+        localStorage.setItem("userFullName",response.full_name)
         return response;
     } catch (err) {
         console.error("Failed to fetch user info:", err);
         return null;
     }
 }
+
 
 
 // === Example: Fetch current user lists ===
@@ -212,10 +207,10 @@ export async function getAllLists() {
         return response;
     } catch (err) {
         console.error("Failed to fetch product lists:", err);
-
         throw err;
     }
 }
+
 
 // === delete a list
 export async function deleteList(list_id) {
@@ -245,35 +240,40 @@ export async function addListName(list_name: string, platform: string) {
     }
 }
 
-
-export async function addItemsToList(list_id, file) {
-    const accessToken = TokenService.getAccessToken();
-    if (!accessToken) throw new Error("No access token available. Please log in again.");
-
+export async function addItemsToList(list_id: string, file: File) {
     try {
-        const formData = new FormData()
-        formData.append("list_id", list_id)
-        formData.append("file", file)
+        const formData = new FormData();
+        formData.append("list_id", list_id);
+        formData.append("file", file);
 
+        // ApiService.post already handles auth & JSON parsing
         const res = await ApiService.post("/api/add_items_to_product_list/", formData, true);
 
-        if (!res.ok) {
-            console.warn('Logout request failed', await res.json());
-        } else {
-            console.log(await res.json());
-        }
+        return res; // parsed JSON response
     } catch (err) {
-        console.error('Error in creating new list :', err);
+        // ApiService throws an Error with message = JSON.stringify(errorResponse)
+        try {
+            const parsed = JSON.parse(err.message);
+            console.error(parsed);
+            return parsed;
+        } catch {
+            console.error("Unexpected error:", err);
+            return { error: "Unexpected error" };
+        }
     }
-
 }
+
+
+
 
 
 export async function runAudit(product_list_id: string, reAudit: boolean) {
     try {
         console.log(`reAudit is ${reAudit}`)
         const response = await ApiService.post("/api/run_audit/", { product_list_id, reAudit });
-        console.log("Run Audit:", response);
+        console.log("%c Start Audit:", "background: green; color: white; font-weight: bold; padding: 4px; border-radius: 4px;");
+        console.log(response);
+
         return response;
 
     } catch (err) {
@@ -285,7 +285,9 @@ export async function runAudit(product_list_id: string, reAudit: boolean) {
 export async function stopAudit(task_id: string) {
     try {
         const response = await ApiService.post("/api/stop_audit/", { task_id });
-        console.log("Stop Audit:", response);
+        console.log("%c Stop Audit:", "background: red; color: white; font-weight: bold; padding: 4px; border-radius: 4px;");
+        console.log(response);
+
         return response;
 
     } catch (err) {
@@ -297,7 +299,8 @@ export async function stopAudit(task_id: string) {
 export function auditSSE(task_id: string, onProgress: (data: any) => void) {
     return new Promise((resolve, reject) => {
         try {
-            const url = `http://127.0.0.1:8000/api/tasks_sse/${task_id}/`;
+            console.log(task_id, "in sse")
+            const url = `/api/tasks_sse/${task_id}/`;
             const eventSource = new EventSource(url);
 
             eventSource.onmessage = (event) => {
@@ -385,7 +388,6 @@ export async function checkCelery() {
 
     } catch (err) {
         console.error("Error in creating new list:", err);
-        throw err;
     }
 }
 

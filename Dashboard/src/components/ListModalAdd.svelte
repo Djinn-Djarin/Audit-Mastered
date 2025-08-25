@@ -1,13 +1,11 @@
 <script>
     import { createEventDispatcher } from "svelte";
 
-
     import { platforms, addListName, addItemsToList } from "../lib/utils.js";
     import { toast } from "svelte-sonner";
 
-
-    const dispatch = createEventDispatcher()
-    let listName = "My Product List";
+    const dispatch = createEventDispatcher();
+    let listName = "Etrade";
     let selectedPlatform = "amazon";
     let file = null;
 
@@ -15,59 +13,75 @@
         file = e.target.files[0];
     }
 
-async function handleSubmit() {
-    try {
-        const addList = await addListName(listName, selectedPlatform);
-        console.log("addListName:", addList);
-
-        if (addList.status !== "success") {
-            toast.error(`Failed to create list: ${listName}`);
-            return;
-        }
-
-        toast.success(`${listName} List created!`);
-
-        const listId = addList.list_id;
-
-        // Upload file if it exists
-        if (listId && file) {
-            const addItems = await addItemsToList(listId, file);
-            console.log("addItems:", addItems);
-
-            if (addItems.status !== "success") {
-                toast.error("File upload failed. List created without items.");
+    async function handleSubmit() {
+        try {
+            if (!file) {
+                toast.error("Please Upload File");
+                return;
             }
-        }
+            const addList = await addListName(listName, selectedPlatform);
+            console.log("addListName:", addList);
 
-        // Build the object to send to parent
-        const newList = {
-            list_id: listId,
-            list_name: listName,
-            created_at: new Date().toISOString(), // or use returned value from API
-            platform: selectedPlatform,
-            list_attributes: {
-                product_count: file ? 1 : 0 // or actual count if API returns it
+            if (addList.status !== "success") {
+                toast.error(`Failed to create list: ${listName}`);
+                return;
             }
-        };
 
-        // Dispatch both close and the new list to parent
-        dispatch("add", newList);
-        dispatch("close");
-    } catch (err) {
-        console.error("API request failed:", err);
-        toast.error("Something went wrong.");
+            toast.success(`${listName} List created!`);
+
+            const listId = addList.list_id;
+
+            // Upload file if it exists
+            let addItems;
+            if (listId && file) {
+                addItems = await addItemsToList(listId, file);
+                console.log("addItems:", addItems);
+
+                if (addItems?.status !== "success") {
+                    toast.error(
+                        addItems?.msg ||
+                            "File upload failed. List created without items.",
+                    );
+                }
+            }
+
+            // Build the object to send to parent
+            const newList = {
+                list_id: listId,
+                list_name: listName,
+                created_at: new Date().toISOString(), // or use returned value from API
+                platform: selectedPlatform,
+                list_attributes: {
+                    product_count: file ? addItems.product_count : 0, // or actual count if API returns it
+                    count: 0, // or actual count if API returns it
+                    "Processed Items":0
+                },
+            };
+
+            // Dispatch both close and the new list to parent
+            dispatch("add", newList);
+            dispatch("close");
+        } catch (err) {
+            console.error("API request failed:", err);
+
+            let msg = "Request failed";
+            try {
+                const errObj = JSON.parse(err.message);
+                msg = errObj.msg || msg;
+            } catch (e) {
+                msg = err.message; // fallback to raw error message
+            }
+
+            toast.error(msg);
+        }
     }
-}
-
-
 
     // get platform details
     $: selectedDetails = platforms.find((p) => p.name === selectedPlatform);
 </script>
 
-
 <div
-    class="rounded-xl p-6 shadow-lg border border-gray-200 w-96 flex flex-col space-y-5 transition"
+    class="rounded-xl p-6 shadow-lg border border-gray-200 w-[500px] flex flex-col space-y-5 transition"
     style="background-color: {selectedDetails
         ? selectedDetails.color + '20'
         : 'white'}"
@@ -113,8 +127,32 @@ async function handleSubmit() {
     {/if}
 
     <!-- Upload File -->
-    <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1"
+    <div class="flex flex-col">
+     <span class="text-xs bg-gray-600 p-2 space-y-2 flex flex-col text-gray-100 font-mono rounded">
+
+        <span>
+            Column name must be the same as the platform. <br>
+        </span>
+        <span>
+
+            <span class="bg-gray-700 text-white font-mono rounded px-2 py-0.5 ml-1">
+                amazon
+            </span>
+            <span class="bg-gray-700 text-white font-mono rounded px-2 py-0.5 ml-1">
+                flipkart
+            </span>
+            <span class="bg-gray-700 text-white font-mono rounded px-2 py-0.5 ml-1">
+                zepto
+            </span>
+            <span class="bg-gray-700 text-white font-mono rounded px-2 py-0.5 ml-1">
+                swiggy
+            </span>
+        </span>
+
+</span>
+
+
+        <label class="block text-sm font-medium text-gray-700 m-2"
             >Upload File</label
         >
         <label

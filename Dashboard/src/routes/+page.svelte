@@ -54,7 +54,7 @@
 
     <!-- Main content grows to push footer down -->
     <main
-        class="flex-1 flex flex-wrap gap-6 px-6 py-10 items-start justify-center"
+        class="flex-1 flex flex-wrap gap-15 px-6 py-10 items-start justify-center"
     >
         {#if lists.length > 0}
             {#each lists as list (list.list_id)}
@@ -65,16 +65,16 @@
         {/if}
     </main>
 
-  <div class="relative w-full h-[400px] flex items-center justify-center">
+  <div class="fixed bottom-[20%] right-[50%]">
     <button
         on:click={toggleAddList}
         class="rounded-full h-20 w-20 flex items-center justify-center shadow-xl bg-gray-200 transition border border-dashed border-gray-400 
-               lg:floating-btn"
+               "
     >
         <img
             src="/images/plus.png"
             alt="Add list"
-            class="w-10 h-10"
+            class="w-10 h-10 "
         />
     </button>
 </div>
@@ -95,6 +95,8 @@
                     <ListModalAdd
                         on:close={() => (isAddList = false)}
                         on:add={(e) => (lists = [...lists, e.detail])}
+    
+                        
                     />
                 </div>
             </div>
@@ -105,19 +107,3 @@
     <Footer />
 </div>
 
-<style>
-    /* Floating animation */
-    @keyframes infinity {
-        to {
-            offset-distance: 100%;
-        }
-    }
-
-    .floating-btn {
-        offset-path: path(
-            "M 400,200 C 100,0 100,400 400,200 C 700,0 700,400 400,200"
-        );
-        offset-rotate: 0deg; /* keep it upright instead of rotating */
-        animation: infinity 30s linear infinite;
-    }
-</style>

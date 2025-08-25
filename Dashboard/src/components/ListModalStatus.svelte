@@ -9,6 +9,7 @@
         auditSSE,
         deleteList,
         exportAudit,
+        auditTaskIDs
     } from "../lib/utils.js";
 
     const dispatch = createEventDispatcher();
@@ -17,8 +18,8 @@
     export let list_name;
     export let created_at;
     export let platform;
-    export let list_attributes;
-    export let isReviewed;
+    export let list_attributes={"Processed Items":0}
+  
 
     let progress = 0;
     let auditId = null;
@@ -32,11 +33,21 @@
     $: selectedDetails = platforms.find((p) => p.name === platform);
 
     async function sendAuditRequest(list_id) {
+
+        console.log(`reAudit is ${reAudit}`)
         const response = await runAudit(list_id, reAudit);
         auditId = response.task_id;
 
+        if (response.status == "success"){
+            toast.success(response.msg)
+        }else{
+            toast.error(response.msg)
+        }
+        
         isAuditRunning = true;
+        await getAllAuditTaskIDs()
         streamAudit(auditId, list_id);
+
     }
 
     async function sendStopAuditRequest(list_id) {
@@ -45,7 +56,7 @@
         if (!task)
             return console.warn(`No running task for list_id ${list_id}`);
 
-        await stopAudit(task.task_id);
+        const response = await stopAudit(task.task_id);
 
         tasks = tasks.filter((t) => t.list_id !== list_id);
         if (tasks.length > 0) {
@@ -54,6 +65,11 @@
             localStorage.removeItem("audit_tasks");
         }
 
+        if(response.status == "success"){
+            toast.success(response.msg)
+        }else{
+            toast.error(response.msg)
+        }
         isAuditRunning = false;
     }
 
@@ -90,6 +106,24 @@
             });
     }
 
+    async function deleteListHandler(list_id){
+        const res = await deleteList(list_id)
+        if(res.status == "success"){
+            toast.success(`${list_id} List Delected Successfully`)
+        }
+        dispatch("deleted", {list_id})
+    } 
+
+    async function downloadAudit(list_id) {
+        try{
+
+            let res = await exportAudit(list_id)
+        }catch(err){
+            let mes = JSON.parse(err.message)
+            console.err(msg)
+        }
+    }
+
     onMount(() => {
         const tasks = JSON.parse(localStorage.getItem("audit_tasks")) || [];
         const myTask = tasks.find((t) => t.list_id === list_id);
@@ -98,6 +132,21 @@
             streamAudit(myTask.task_id, list_id);
         }
     });
+
+      async function getAllAuditTaskIDs() {
+        const res = await auditTaskIDs(); // calls RunningAudits API
+        console.log("Running audits from backend:", res);
+
+        if (res?.running_audits?.length > 0) {
+            localStorage.setItem(
+                "audit_tasks",
+                JSON.stringify(res.running_audits),
+            );
+        } else {
+            localStorage.removeItem("audit_tasks");
+        }
+    }
+
 </script>
 
 
@@ -131,19 +180,6 @@
 
         <!-- Platform Logo -->
 
-        <div class="flex flex-col items-end space-y-1">
-            {#if isReviewed}
-                <span
-                    class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-green-100 text-green-600"
-                    >Reviewed</span
-                >
-            {:else}
-                <span
-                    class="px-2 py-0.5 text-[10px] font-medium rounded-full bg-yellow-100 text-yellow-600"
-                    >Pending</span
-                >
-            {/if}
-        </div>
     </div>
     <div class="text-xs text-gray-500">
         {new Date(created_at).toLocaleString()}

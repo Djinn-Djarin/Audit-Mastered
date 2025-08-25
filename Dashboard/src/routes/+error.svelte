@@ -1,18 +1,15 @@
 <script>
     import { goto } from "$app/navigation";
-
+  import Walking from "../components/Walking.svelte";
+  let src = '/images/Cat playing animation.json'
 </script>
-<div class="relative w-screen h-screen overflow-hidden">
+<div class="flex items-center justify-center w-screen h-screen overflow-hidden">
   <!-- Floating wrapper -->
-  <div class="animate-float-small w-full h-full">
-    <img 
-      src="/images/404.png" 
-      alt="404"
-      class="w-full h-full object-cover"
-    />
-  </div>
 
-  <button class="absolute flex top-[75%] left-1/2 -translate-x-1/2 underline p-4 text-xl text-pink-400 rounded-lg"
+       <Walking src={src} />
+
+
+  <button class="absolute flex top-[10%] left-1/2 -translate-x-1/2  p-4 text-3xl  rounded-lg"
    onclick={() => goto('/')}
   >
     Go to Home

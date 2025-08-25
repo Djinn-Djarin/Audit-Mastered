@@ -5,7 +5,7 @@
     import { browser } from "$app/environment";
     import { onMount, onDestroy } from "svelte";
 
-    let userImg = "/images/boy.png";
+    let userImg = "/images/hemlata.jpg";
     let isLoggedIn = true;
     let isInternetConnected = false;
     let userFullName = "Guest";
@@ -59,7 +59,7 @@
         <div class="flex items-center space-x-6 sm:space-x-3 ">
             <span class="text-[15px] font-medium text-gray-700">Backend</span>
                <div
-                class={`h-[15px] w-[15px] rounded-full ${
+                class={`h-[15px] w-[15px] rounded-full animate-ping ${
                     celeryStatus
                         ? "bg-green-700 animate-pulse"
                         : "bg-red-500"
